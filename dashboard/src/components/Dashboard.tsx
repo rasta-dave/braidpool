@@ -30,6 +30,7 @@ import MineInventoryDashboard from './MineInventoryDashboard';
 import PoolHashrateChart from './PoolHashrateChart';
 import MempoolLatencyStats from './MempoolLatencyStats';
 import RecentBlocksTable from './RecentBlocksTable';
+import PublicExplorer from './public/PublicExplorer';
 
 // Utils
 import {
@@ -47,6 +48,7 @@ enum Page {
   MINING_INVENTORY = 'mining-inventory',
   MEMPOOL = 'mempool',
   DAG_VISUALIZATION = 'dag-visualization',
+  PUBLIC_EXPLORER = 'public-explorer',
 }
 
 const Dashboard = () => {
@@ -257,6 +259,36 @@ const Dashboard = () => {
             primaryTypographyProps={{ fontSize: '0.875rem' }}
           />
         </ListItemButton>
+
+        <ListItemButton
+          onClick={() => setCurrentPage(Page.PUBLIC_EXPLORER)}
+          selected={currentPage === Page.PUBLIC_EXPLORER}
+          sx={{
+            pl: 2,
+            py: 1.5,
+            borderLeft:
+              currentPage === Page.PUBLIC_EXPLORER
+                ? `4px solid ${colors.primary}`
+                : 'none',
+            '&.Mui-selected': {
+              backgroundColor: 'rgba(57, 134, 232, 0.08)',
+            },
+          }}>
+          <ListItemIcon
+            sx={{
+              minWidth: 40,
+              color:
+                currentPage === Page.PUBLIC_EXPLORER
+                  ? colors.primary
+                  : colors.textSecondary,
+            }}>
+            <LayersIcon fontSize='small' />
+          </ListItemIcon>
+          <ListItemText
+            primary='Public Explorer'
+            primaryTypographyProps={{ fontSize: '0.875rem' }}
+          />
+        </ListItemButton>
       </List>
     </Drawer>
   );
@@ -327,6 +359,12 @@ const Dashboard = () => {
                 <Typography>No data available</Typography>
               )}
             </Card>
+          </Box>
+        );
+      case Page.PUBLIC_EXPLORER:
+        return (
+          <Box sx={{ p: 1 }}>
+            <PublicExplorer />
           </Box>
         );
       default:

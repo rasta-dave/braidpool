@@ -71,7 +71,7 @@ const Card: React.FC<CardProps> = ({
           {headerExtra && <Box>{headerExtra}</Box>}
         </Box>
       )}
-      <Box sx={{ p: 0 }}>{children}</Box>
+      <Box sx={{ p: 2 }}>{children}</Box>
     </Paper>
   );
 };

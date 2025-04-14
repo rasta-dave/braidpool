@@ -5,6 +5,8 @@ import { Box, Container, Link, Typography, Button } from '@mui/material';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard';
 import ShareDetails from './components/ShareDetails';
+import PublicExplorer from './components/public/PublicExplorer';
+import BeadExplorer from './components/public/PublicExplorer/BeadExplorer';
 
 // Create a dark theme
 const theme = createTheme({
@@ -68,6 +70,7 @@ function App() {
               top: '20px',
               right: '20px',
               zIndex: 9999,
+              display: { xs: 'none', md: 'block' }, // Hide on mobile
             }}>
             Test Share Details
           </Button>
@@ -88,6 +91,11 @@ function App() {
             }}>
             <Routes>
               <Route path='/' element={<Dashboard />} />
+              <Route path='/explorer' element={<PublicExplorer />} />
+              <Route
+                path='/explorer/bead/:beadHash'
+                element={<BeadExplorer standalone />}
+              />
               {/* Add more routes as needed */}
             </Routes>
             <Box
