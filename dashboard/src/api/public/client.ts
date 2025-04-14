@@ -1,6 +1,16 @@
 import { BraidData } from '../../types/braid';
-import { Bead, BlockHeader, Transaction } from '../../types/Bead';
+import { Bead, BlockHeader, Transaction, BeadParent } from '../../types/Bead';
 import { PUBLIC_API_URL, DEFAULT_API_PARAMS } from '../../config/api';
+
+// Define interface for the test_data endpoint response
+interface TestData {
+  bead_count: number;
+  children: Record<string, string[]>;
+  cohorts: string[][];
+  highest_work_path: string[];
+  parents: Record<string, string[]>;
+  work: Record<string, number>;
+}
 
 /**
  * Public API client for the Blockchain Explorer
@@ -10,6 +20,11 @@ export class PublicApiClient {
   private baseUrl: string;
   private timeout: number;
   private retries: number;
+  private testData: TestData | null = null;
+  private testDataFetchPromise: Promise<TestData> | null = null;
+  private lastFetchTime: number = 0;
+  private cacheTTL: number = 300000; // 5 minutes cache TTL
+  private processingBatch: boolean = false;
 
   constructor(
     baseUrl: string = PUBLIC_API_URL,
@@ -36,6 +51,11 @@ export class PublicApiClient {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
+        console.log(
+          `🔄 Fetching data from ${url}... (Attempt ${attempt + 1}/${
+            this.retries
+          })`
+        );
         const response = await fetch(url, {
           ...options,
           signal: controller.signal,
@@ -47,7 +67,9 @@ export class PublicApiClient {
           throw new Error(`API error: ${response.status}`);
         }
 
-        return await response.json();
+        const data = await response.json();
+        console.log(`✅ Successfully fetched data from ${url}`);
+        return data;
       } catch (error: any) {
         console.warn(
           `🔄 Attempt ${attempt + 1}/${this.retries} failed:`,
@@ -73,27 +95,272 @@ export class PublicApiClient {
   }
 
   /**
+   * Fetch test data from the simulator
+   * This is the main data source for all our endpoints
+   */
+  private async fetchTestData(): Promise<TestData> {
+    const now = Date.now();
+    const isCacheFresh =
+      this.testData && now - this.lastFetchTime < this.cacheTTL;
+
+    // Return cached data if we already fetched it and it's not expired
+    if (isCacheFresh && this.testData) {
+      console.log(
+        `📦 Using cached test data from ${new Date(
+          this.lastFetchTime
+        ).toLocaleTimeString()}`
+      );
+      return this.testData;
+    }
+
+    // If already fetching, wait for that promise rather than starting a new request
+    if (this.testDataFetchPromise) {
+      console.log(`⏳ Waiting for in-progress test data fetch...`);
+
+      // Add a timeout to ensure we don't wait forever for an in-progress request
+      try {
+        const timeoutPromise = new Promise<TestData>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Timed out waiting for in-progress fetch'));
+          }, 10000); // 10 second timeout for waiting
+        });
+
+        // Race between the in-progress fetch and our timeout
+        return await Promise.race([this.testDataFetchPromise, timeoutPromise]);
+      } catch (error) {
+        console.error('❌ Timeout waiting for in-progress fetch', error);
+        // Cancel the in-progress promise
+        this.testDataFetchPromise = null;
+
+        // Return stale cache if available
+        if (this.testData) {
+          console.log('📦 Returning stale cached data due to fetch timeout');
+          return this.testData;
+        }
+
+        // If no cache, throw an error
+        throw error;
+      }
+    }
+
+    try {
+      console.log('🔄 Fetching test data from simulator...');
+
+      // Create a new fetch promise and handle the possible null case
+      const fetchPromise = (async () => {
+        // Check if the URL already ends with test_data
+        const url = this.baseUrl.endsWith('test_data')
+          ? this.baseUrl
+          : `${this.baseUrl}/test_data`;
+        console.log(`🌐 Using URL: ${url}`);
+
+        const data = await this.fetchWithRetry<TestData>(url);
+
+        // If we get an extremely large dataset, we might need to process it in chunks
+        // or reduce its size
+        if (data && data.bead_count > 10000) {
+          console.log(
+            `⚠️ Large dataset detected (${data.bead_count} beads), truncating for performance`
+          );
+
+          // Limit the data size to improve performance
+          // Keep only the first 5000 items for each large collection
+          const truncateSize = 5000;
+
+          // Helper to safely truncate an object's entries for work dictionary
+          const truncateWorkEntries = (obj: Record<string, number>) => {
+            const result: Record<string, number> = {};
+            let entryCount = 0;
+
+            for (const [key, value] of Object.entries(obj)) {
+              result[key] = value;
+              entryCount++;
+
+              // If we've added more than truncateSize entries, stop
+              if (entryCount >= truncateSize) {
+                console.log(
+                  `🔪 Truncated object from ${
+                    Object.keys(obj).length
+                  } to ${truncateSize} entries`
+                );
+                break;
+              }
+            }
+
+            return result;
+          };
+
+          // Helper to safely truncate an object's entries for string arrays
+          const truncateCollectionEntries = (obj: Record<string, string[]>) => {
+            const result: Record<string, string[]> = {};
+            let entryCount = 0;
+
+            for (const [key, value] of Object.entries(obj)) {
+              result[key] = value;
+              entryCount++;
+
+              // If we've added more than truncateSize entries, stop
+              if (entryCount >= truncateSize) {
+                console.log(
+                  `🔪 Truncated object from ${
+                    Object.keys(obj).length
+                  } to ${truncateSize} entries`
+                );
+                break;
+              }
+            }
+
+            return result;
+          };
+
+          // Truncate children and parents - which contain string arrays
+          if (Object.keys(data.children).length > truncateSize) {
+            data.children = truncateCollectionEntries(data.children);
+          }
+
+          if (Object.keys(data.parents).length > truncateSize) {
+            data.parents = truncateCollectionEntries(data.parents);
+          }
+
+          // Truncate work object - which contains numbers
+          if (Object.keys(data.work).length > truncateSize) {
+            data.work = truncateWorkEntries(data.work);
+          }
+
+          // Truncate highest_work_path if very long
+          if (data.highest_work_path.length > truncateSize) {
+            data.highest_work_path = data.highest_work_path.slice(
+              0,
+              truncateSize
+            );
+            console.log(
+              `🔪 Truncated highest_work_path from ${data.highest_work_path.length} to ${truncateSize} entries`
+            );
+          }
+
+          // Truncate cohorts if very numerous
+          if (data.cohorts.length > truncateSize) {
+            data.cohorts = data.cohorts.slice(0, truncateSize);
+            console.log(
+              `🔪 Truncated cohorts from ${data.cohorts.length} to ${truncateSize} entries`
+            );
+          }
+        }
+
+        // Update cache time and store data
+        this.lastFetchTime = Date.now();
+        this.testData = data;
+
+        console.log(`✅ Retrieved test data with ${data.bead_count} beads`);
+        return data;
+      })();
+
+      // Store the promise
+      this.testDataFetchPromise = fetchPromise;
+
+      // Get data from the promise
+      const result = await fetchPromise;
+
+      // Clear the promise after it's complete
+      this.testDataFetchPromise = null;
+
+      return result;
+    } catch (error) {
+      // Clear the promise on error
+      this.testDataFetchPromise = null;
+      console.error('❌ Error fetching test data:', error);
+
+      // Return cached data if available, even if stale, rather than failing completely
+      if (this.testData) {
+        console.log('📦 Returning stale cached data due to fetch error');
+        return this.testData;
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Convert string hash to numeric id
+   * For our visualization, we need numeric IDs, so we'll use a simple hash function
+   */
+  private hashToId(hash: string): number {
+    // Take the last 8 characters of the hash and convert to a number
+    return parseInt(hash.slice(-8), 16);
+  }
+
+  /**
    * Fetch the current braid structure
    */
   async getBraidData(): Promise<BraidData> {
     try {
-      console.log('🔄 Fetching braid data...');
+      console.log('🔄 Fetching braid data from API...');
 
-      // For initial development, use mock data
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry<BraidData>(`${this.baseUrl}/braid`);
+      const testData = await this.fetchTestData();
 
-      // Using loadSampleBraidData as a temporary measure
-      const { loadSampleBraidData } = await import(
-        '../../utils/braidDataTransformer'
-      );
-      const data = await loadSampleBraidData();
-      console.log('✅ Braid data loaded (from sample)');
-      return data;
+      // Convert string hash data to number data for the BraidData interface
+      const parents: Record<string, number[]> = {};
+      const children: Record<string, number[]> = {};
+      const cohorts: number[][] = [];
+      const tips: number[] = [];
+
+      // Convert parents map
+      Object.entries(testData.parents).forEach(([bead, parentHashes]) => {
+        const beadId = this.hashToId(bead);
+        parents[beadId] = parentHashes.map((parentHash) =>
+          this.hashToId(parentHash)
+        );
+      });
+
+      // Convert children map
+      Object.entries(testData.children).forEach(([bead, childHashes]) => {
+        const beadId = this.hashToId(bead);
+        children[beadId] = childHashes.map((childHash) =>
+          this.hashToId(childHash)
+        );
+      });
+
+      // Convert cohorts
+      testData.cohorts.forEach((cohort) => {
+        cohorts.push(cohort.map((beadHash) => this.hashToId(beadHash)));
+      });
+
+      // Find tips
+      this.findTips(testData).forEach((tipHash) => {
+        tips.push(this.hashToId(tipHash));
+      });
+
+      // Create the BraidData object
+      const braidData: BraidData = {
+        parents,
+        children,
+        cohorts,
+        tips,
+        description: `Simulated braid with ${testData.bead_count} beads`,
+      };
+
+      console.log('✅ Braid data transformed successfully');
+      return braidData;
     } catch (error) {
-      console.error('❌ Error fetching braid data:', error);
+      console.error('❌ Error transforming braid data:', error);
       throw error;
     }
+  }
+
+  /**
+   * Find tip beads (those with no children)
+   */
+  private findTips(testData: TestData): string[] {
+    const allBeads = new Set(Object.keys(testData.parents));
+    const nonTips = new Set();
+
+    // Any bead that appears as a child is not a tip
+    Object.values(testData.children).forEach((children) => {
+      children.forEach((child) => nonTips.add(child));
+    });
+
+    // Tips are beads that have parents but are not children of any bead
+    return Array.from(allBeads).filter((bead) => !nonTips.has(bead));
   }
 
   /**
@@ -101,58 +368,85 @@ export class PublicApiClient {
    */
   async getBeadByHash(hash: string): Promise<Bead> {
     try {
-      console.log(`🔄 Fetching bead with hash: ${hash}`);
+      console.log(`🔄 Fetching bead with hash: ${hash} from API...`);
 
-      // For initial development, simulate API call
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry<Bead>(`${this.baseUrl}/bead/${hash}`);
+      const testData = await this.fetchTestData();
 
-      // Temporary mock data
-      await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate network delay
+      // Check if the bead exists
+      if (
+        !testData.parents[hash] &&
+        !Object.values(testData.children).some((children) =>
+          children.includes(hash)
+        )
+      ) {
+        throw new Error(`Bead with hash ${hash} not found`);
+      }
 
-      // Create the block header
-      const header: BlockHeader = {
+      // Convert to Bead format
+      const parentsList: BeadParent[] = (testData.parents[hash] || []).map(
+        (parentHash) => ({
+          beadHash: parentHash,
+          timestamp: Date.now() - Math.floor(Math.random() * 60000), // Random time in the last minute
+        })
+      );
+
+      // Create a minimal blockHeader
+      const blockHeader: BlockHeader = {
         version: 1,
         prevBlockHash:
+          parentsList[0]?.beadHash ||
           '0000000000000000000000000000000000000000000000000000000000000000',
         merkleRoot:
-          '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
-        timestamp: Date.now() / 1000,
-        bits: 486604799,
-        nonce: 2083236893,
+          '0000000000000000000000000000000000000000000000000000000000000000',
+        timestamp: Date.now() - Math.floor(Math.random() * 3600000), // Random time in the last hour
+        bits: 0,
+        nonce: 0,
       };
 
-      // Mock empty transaction for development
-      const emptyTx: Transaction = {
-        txid: '0'.repeat(64),
-        version: 1,
-        lockTime: 0,
-        size: 250,
-        weight: 1000,
-        inputs: [],
-        outputs: [],
-      };
-
-      // Mock data for development
-      const mockBead: Bead = {
-        blockHeader: header,
+      const bead: Bead = {
+        blockHeader,
         beadHash: hash,
         coinbaseTransaction: {
-          transaction: emptyTx,
-          merkleProof: { txIndex: 0, siblings: [] },
+          transaction: {
+            txid: '0000000000000000000000000000000000000000000000000000000000000000',
+            version: 1,
+            lockTime: 0,
+            size: 0,
+            weight: 0,
+            inputs: [],
+            outputs: [],
+          },
+          merkleProof: {
+            txIndex: 0,
+            siblings: [],
+          },
         },
         payoutUpdateTransaction: {
-          transaction: emptyTx,
-          merkleProof: { txIndex: 0, siblings: [] },
+          transaction: {
+            txid: '0000000000000000000000000000000000000000000000000000000000000000',
+            version: 1,
+            lockTime: 0,
+            size: 0,
+            weight: 0,
+            inputs: [],
+            outputs: [],
+          },
+          merkleProof: {
+            txIndex: 0,
+            siblings: [],
+          },
         },
-        lesserDifficultyTarget: 0x1d00ffff,
-        parents: [],
+        lesserDifficultyTarget: testData.work[hash] || 0,
+        parents: parentsList,
         transactions: [],
-        observedTimeAtNode: Date.now() / 1000,
+        observedTimeAtNode: Date.now(),
+        isTip: !testData.children[hash] || testData.children[hash].length === 0,
+        isGenesis:
+          !testData.parents[hash] || testData.parents[hash].length === 0,
       };
 
-      console.log(`✅ Retrieved bead ${hash} (mock data)`);
-      return mockBead;
+      console.log(`✅ Retrieved bead ${hash} from test data`);
+      return bead;
     } catch (error) {
       console.error(`❌ Error fetching bead ${hash}:`, error);
       throw error;
@@ -164,31 +458,27 @@ export class PublicApiClient {
    */
   async getNetworkStats() {
     try {
-      console.log('🔄 Fetching network statistics...');
+      console.log('🔄 Fetching network statistics from API...');
 
-      // For initial development, simulate API call
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry(`${this.baseUrl}/stats`);
+      const testData = await this.fetchTestData();
 
-      // Mock data for development
-      await new Promise((resolve) => setTimeout(resolve, 700)); // Simulate network delay
-
+      // Extract basic stats from test data
       const stats = {
-        totalBeads: 1254,
-        lastUpdate: new Date().toISOString(),
-        networkHashrate: 45.7, // TH/s
-        activeMiners: 32,
-        averageConfirmationTime: 8.3, // minutes
-        beadsPerCohortRatio: 2.38, // Close to ideal 2.42
-        difficulty: 87334291,
-        totalTransactions: 15420,
-        cohortFormationRate: 4.2, // per hour
+        beadCount: testData.bead_count,
+        cohortCount: testData.cohorts.length,
+        tipCount: this.findTips(testData).length,
+        highestWorkPathLength: testData.highest_work_path.length,
+        // Other stats would be calculated or mocked here
+        networkHashrate: Math.floor(Math.random() * 1000) + 'PH/s', // Mock data
+        activeMiners: Math.floor(Math.random() * 100), // Mock data
+        difficulty: Math.floor(Math.random() * 1000000), // Mock data
+        lastUpdated: new Date().toISOString(),
       };
 
-      console.log('✅ Retrieved network statistics (mock data)');
+      console.log('✅ Generated network statistics from test data');
       return stats;
     } catch (error) {
-      console.error('❌ Error fetching network statistics:', error);
+      console.error('❌ Error generating network statistics:', error);
       throw error;
     }
   }
@@ -198,40 +488,29 @@ export class PublicApiClient {
    */
   async getRecentBeads(limit: number = 10) {
     try {
-      console.log(`🔄 Fetching ${limit} recent beads...`);
+      console.log(`🔄 Fetching ${limit} recent beads from API...`);
 
-      // For initial development, simulate API call
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry(`${this.baseUrl}/beads/recent?limit=${limit}`);
+      const testData = await this.fetchTestData();
 
-      // Mock data for development
-      await new Promise((resolve) => setTimeout(resolve, 600)); // Simulate network delay
+      // We don't have "recent" in test data, so we'll use the highest work path
+      const recentBeadHashes = testData.highest_work_path.slice(0, limit);
 
-      // Generate mock beads for development
-      const recentBeads = Array(limit)
-        .fill(null)
-        .map((_, i) => {
-          const timestamp = Date.now() / 1000 - i * 600; // 10 minutes apart
-
-          return {
-            beadHash: `0000${Math.random().toString(16).slice(2, 14)}${i}`,
-            timestamp,
-            miner: ['MinerA', 'MinerB', 'MinerC', 'MinerD'][
-              Math.floor(Math.random() * 4)
-            ],
-            workValue: (Math.random() * 200 + 800).toFixed(2),
-            transactionCount: Math.floor(Math.random() * 400) + 100,
-            beadsInCohort: Math.floor(Math.random() * 3) + 1,
-            formsCohort: Math.random() > 0.7, // 30% chance of forming a cohort
-          };
-        });
+      const recentBeads = recentBeadHashes.map((hash) => ({
+        beadHash: hash,
+        timestamp: Date.now() - Math.floor(Math.random() * 3600000), // Random time in the last hour
+        miner: 'Simulator',
+        workValue: testData.work[hash] || 0,
+        transactionCount: Math.floor(Math.random() * 10), // Mock transaction count
+        beadsInCohort: 0, // We'd calculate this if needed
+        formsCohort: false,
+      }));
 
       console.log(
-        `✅ Retrieved ${recentBeads.length} recent beads (mock data)`
+        `✅ Generated ${recentBeads.length} recent beads from test data`
       );
       return recentBeads;
     } catch (error) {
-      console.error('❌ Error fetching recent beads:', error);
+      console.error('❌ Error generating recent beads:', error);
       throw error;
     }
   }
@@ -241,72 +520,59 @@ export class PublicApiClient {
    */
   async searchBeads(query: string): Promise<Bead[]> {
     try {
-      console.log(`🔍 Searching for beads matching: ${query}`);
+      console.log(`🔍 Searching for beads matching: ${query} from API...`);
 
-      // For initial development, simulate API call
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry<Bead[]>(`${this.baseUrl}/search?q=${encodeURIComponent(query)}`);
+      const testData = await this.fetchTestData();
 
-      // Mock data for development
-      await new Promise((resolve) => setTimeout(resolve, 600)); // Simulate network delay
+      // Search for beads with hash starting with the query
+      const matchingHashes = Object.keys(testData.parents)
+        .filter((hash) => hash.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 10); // Limit to 10 results
 
-      // Create a mock transaction
-      const emptyTx: Transaction = {
-        txid: '0'.repeat(64),
-        version: 1,
-        lockTime: 0,
-        size: 250,
-        weight: 1000,
-        inputs: [],
-        outputs: [],
-      };
-
-      // Generate some mock beads for development
-      const mockBeads: Bead[] = Array(3)
-        .fill(null)
-        .map((_, i) => {
-          const beadHash = `${query}${i}abc${Math.random()
-            .toString(16)
-            .slice(2, 8)}`;
-          const timestamp = Date.now() / 1000 - i * 600;
-
-          return {
-            blockHeader: {
-              version: 1,
-              prevBlockHash:
-                '0000000000000000000000000000000000000000000000000000000000000000',
-              merkleRoot:
-                '4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
-              timestamp,
-              bits: 486604799,
-              nonce: 2083236893 + i,
-            },
-            beadHash,
-            coinbaseTransaction: {
-              transaction: emptyTx,
-              merkleProof: { txIndex: 0, siblings: [] },
-            },
-            payoutUpdateTransaction: {
-              transaction: emptyTx,
-              merkleProof: { txIndex: 0, siblings: [] },
-            },
-            lesserDifficultyTarget: 0x1d00ffff,
-            parents: [],
-            transactions: [],
-            observedTimeAtNode: timestamp,
-          };
-        });
+      // Convert to Bead format
+      const results = await Promise.all(
+        matchingHashes.map((hash) => this.getBeadByHash(hash))
+      );
 
       console.log(
-        `✅ Found ${mockBeads.length} beads matching "${query}" (mock data)`
+        `✅ Found ${results.length} beads matching "${query}" from test data`
       );
-      return mockBeads;
+      return results;
     } catch (error) {
-      console.error(
-        `❌ Error searching for beads with query "${query}":`,
-        error
-      );
+      console.error(`❌ Error searching for beads matching "${query}":`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Simple health check for the API
+   */
+  async checkHealth(): Promise<boolean> {
+    try {
+      console.log('🔍 Checking API health...');
+      // Instead of checking /hello, check test_data directly
+      const url = this.baseUrl.endsWith('test_data')
+        ? this.baseUrl
+        : `${this.baseUrl}/test_data`;
+      console.log(`🌐 Health check URL: ${url}`);
+
+      // For health check, use a lower timeout to avoid blocking the UI
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for health check
+
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      const success = response.ok;
+      console.log(
+        `${success ? '✅' : '❌'} API health check ${
+          success ? 'successful' : 'failed'
+        }`
+      );
+      return success;
+    } catch (error) {
+      console.error('❌ API health check failed:', error);
+      return false;
     }
   }
 }

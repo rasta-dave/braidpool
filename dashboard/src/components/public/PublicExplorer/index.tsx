@@ -11,15 +11,27 @@ import {
   InputAdornment,
   IconButton,
   Grid,
+  Button,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Card from '../../common/Card';
 import BraidVisualization from '../../BraidVisualization';
-import publicApiClient from '../../../api/public/client';
-import { transformBraidData } from '../../../utils/braidDataTransformer';
+import { PublicApiClient } from '../../../api/public/client';
 import NetworkStats from './NetworkStats';
 import BeadExplorer from './BeadExplorer';
 import RecentBeadsTable from './RecentBeadsTable';
+import { testPublicApi, displayTestResults } from '../../../utils/apiTestUtils';
+import { PUBLIC_API_URL } from '../../../config/api';
+import ApiStatusIndicator from './ApiStatusIndicator';
+import useSimulatorData from '../../../hooks/useSimulatorData';
+import SimulatorConnection from '../../SimulatorConnection';
+
+// Initialize API client
+const publicApiClient = new PublicApiClient();
 
 // Define available tabs as an enum
 enum ExplorerTab {
@@ -28,12 +40,21 @@ enum ExplorerTab {
   BEADS = 'beads',
   STATS = 'stats',
   ABOUT = 'about',
+  DEBUG = 'debug', // Add debug tab
 }
 
 const PublicExplorer: React.FC = () => {
+  // Use our new simulator data hook
+  const {
+    braidData,
+    visualizationData,
+    isLoading,
+    error: dataError,
+    refresh,
+  } = useSimulatorData();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [braidData, setBraidData] = useState<any>(null);
   const [networkStats, setNetworkStats] = useState<any>(null);
   const [currentTab, setCurrentTab] = useState<ExplorerTab>(
     ExplorerTab.OVERVIEW
@@ -41,39 +62,66 @@ const PublicExplorer: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
 
-  // Fetch data when component mounts
+  // API testing state
+  const [apiTestResults, setApiTestResults] = useState<any>(null);
+  const [apiTestLoading, setApiTestLoading] = useState(false);
+
+  // Fetch network stats when component mounts
   useEffect(() => {
-    const fetchData = async () => {
+    const isMounted = { current: true };
+
+    const fetchStats = async () => {
       try {
-        console.log('🔄 Loading blockchain explorer data...');
+        console.log('🔄 Loading network statistics...');
         setLoading(true);
         setError(null);
 
-        // Get braid data
-        const data = await publicApiClient.getBraidData();
-        const transformedData = transformBraidData(data);
-        setBraidData(transformedData);
-
         // Get network stats
         const stats = await publicApiClient.getNetworkStats();
-        setNetworkStats(stats);
 
-        console.log('✅ Explorer data loaded successfully!');
+        // Only update state if component is still mounted
+        if (isMounted.current) {
+          setNetworkStats(stats);
+          console.log('✅ Network stats loaded successfully!');
+        }
       } catch (err: any) {
-        console.error('❌ Error loading explorer data:', err);
-        setError(`Failed to load data: ${err.message || 'Unknown error'}`);
+        console.error('❌ Error loading network stats:', err);
+        if (isMounted.current) {
+          setError(`Failed to load data: ${err.message || 'Unknown error'}`);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted.current) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchData();
+    fetchStats();
 
-    // Set up polling interval to keep data fresh
-    const intervalId = setInterval(fetchData, 60000); // Update every minute
+    // Set up polling interval to keep data fresh, but don't poll too frequently
+    const intervalId = setInterval(fetchStats, 120000); // Update every 2 minutes
 
-    return () => clearInterval(intervalId);
+    // Cleanup function to prevent memory leaks
+    return () => {
+      isMounted.current = false;
+      clearInterval(intervalId);
+    };
   }, []);
+
+  // Update error state when data error changes
+  useEffect(() => {
+    if (dataError) {
+      setError(dataError.message);
+    }
+  }, [dataError]);
+
+  // Handle tab change
+  const handleTabChange = (
+    event: React.SyntheticEvent,
+    newValue: ExplorerTab
+  ) => {
+    setCurrentTab(newValue);
+  };
 
   // Handle search
   const handleSearch = async () => {
@@ -82,25 +130,40 @@ const PublicExplorer: React.FC = () => {
     try {
       console.log(`🔍 Searching for: ${searchQuery}`);
       setLoading(true);
+      setError(null);
 
       const results = await publicApiClient.searchBeads(searchQuery);
       setSearchResults(results);
+      console.log(`✅ Found ${results.length} results for "${searchQuery}"`);
 
-      // If we have results, switch to the Beads tab
-      if (results.length > 0) {
-        setCurrentTab(ExplorerTab.BEADS);
-      }
+      // Switch to beads tab
+      setCurrentTab(ExplorerTab.BEADS);
     } catch (err: any) {
-      console.error('❌ Search error:', err);
+      console.error(`❌ Error searching for "${searchQuery}":`, err);
       setError(`Search failed: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle tab change
-  const handleTabChange = (_: React.SyntheticEvent, newValue: ExplorerTab) => {
-    setCurrentTab(newValue);
+  // Handle key press in search field
+  const handleSearchKeyPress = (event: React.KeyboardEvent) => {
+    if (event.key === 'Enter') {
+      handleSearch();
+    }
+  };
+
+  // Handle API tests
+  const handleRunApiTests = async () => {
+    setApiTestLoading(true);
+    try {
+      const results = await testPublicApi();
+      setApiTestResults(results);
+    } catch (err) {
+      console.error('❌ Error running API tests:', err);
+    } finally {
+      setApiTestLoading(false);
+    }
   };
 
   // Render current tab content
@@ -118,10 +181,10 @@ const PublicExplorer: React.FC = () => {
               {/* Braid Visualization */}
               <Grid sx={{ width: { xs: '100%', md: '66.667%' } }}>
                 <Card title='Braid Visualization'>
-                  {braidData ? (
+                  {visualizationData ? (
                     <Box>
                       <BraidVisualization
-                        data={braidData}
+                        data={visualizationData}
                         width={700}
                         height={400}
                       />
@@ -137,7 +200,7 @@ const PublicExplorer: React.FC = () => {
                         details.
                       </Typography>
                     </Box>
-                  ) : loading ? (
+                  ) : isLoading ? (
                     <Box
                       sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                       <CircularProgress />
@@ -160,10 +223,10 @@ const PublicExplorer: React.FC = () => {
         return (
           <Box sx={{ mt: 2 }}>
             <Card title='Braid Visualization (Full View)'>
-              {braidData ? (
+              {visualizationData ? (
                 <Box>
                   <BraidVisualization
-                    data={braidData}
+                    data={visualizationData}
                     width={1200}
                     height={800}
                   />
@@ -174,7 +237,7 @@ const PublicExplorer: React.FC = () => {
                     relationships. Hover over nodes to see more details.
                   </Typography>
                 </Box>
-              ) : loading ? (
+              ) : isLoading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
                   <CircularProgress />
                 </Box>
@@ -210,40 +273,45 @@ const PublicExplorer: React.FC = () => {
       case ExplorerTab.ABOUT:
         return (
           <Box sx={{ mt: 2 }}>
-            <Card title='About Braidpool'>
-              <Box sx={{ px: 2, py: 1 }}>
-                <Typography variant='body1' paragraph>
-                  Braidpool is a next-generation mining pool that uses a DAG
-                  (Directed Acyclic Graph) structure called a "braid" to track
-                  mined shares, offering improved efficiency and fairness.
+            <Card title='About the Braidpool Explorer'>
+              <Box>
+                <Typography variant='h6' gutterBottom>
+                  What is Braidpool?
                 </Typography>
                 <Typography variant='body1' paragraph>
-                  Unlike traditional mining pools, Braidpool allows miners to
-                  work on their own block templates, reducing centralization and
-                  improving network health.
+                  Braidpool is a decentralized mining pool for Bitcoin,
+                  implemented as a short-lived DAG-based layer-1 blockchain. It
+                  enables miners to build their own blocks while maintaining low
+                  variance and efficient payouts.
+                </Typography>
+
+                <Typography variant='h6' gutterBottom>
+                  About This Explorer
                 </Typography>
                 <Typography variant='body1' paragraph>
-                  <strong>Key Innovations:</strong>
+                  This public explorer provides real-time insights into the
+                  Braidpool network, allowing anyone to:
                 </Typography>
                 <ul>
                   <li>
                     <Typography variant='body1'>
-                      <strong>DAG Structure:</strong> Instead of a linear
-                      blockchain, Braidpool uses a DAG where each bead can have
-                      multiple parents
+                      View the Directed Acyclic Graph (DAG) structure of the
+                      braid
                     </Typography>
                   </li>
                   <li>
                     <Typography variant='body1'>
-                      <strong>Cohort Formation:</strong> Beads naturally form
-                      cohorts as new beads reference multiple parents
+                      Explore individual beads (shares) and their properties
                     </Typography>
                   </li>
                   <li>
                     <Typography variant='body1'>
-                      <strong>Decentralized Transaction Selection:</strong>{' '}
-                      Miners choose their own transactions, reducing censorship
-                      risk
+                      Monitor network statistics and performance
+                    </Typography>
+                  </li>
+                  <li>
+                    <Typography variant='body1'>
+                      Search for specific beads by hash or miner
                     </Typography>
                   </li>
                 </ul>
@@ -257,66 +325,196 @@ const PublicExplorer: React.FC = () => {
           </Box>
         );
 
+      case ExplorerTab.DEBUG:
+        return (
+          <Box sx={{ mt: 2 }}>
+            <Card title='Simulator Connection'>
+              <SimulatorConnection />
+            </Card>
+
+            <Box sx={{ mt: 3 }}>
+              <Card title='API Connection Status'>
+                <ApiStatusIndicator />
+                <Box sx={{ mt: 2 }}>
+                  <Button
+                    variant='contained'
+                    color='primary'
+                    onClick={refresh}
+                    startIcon={
+                      isLoading ? (
+                        <CircularProgress size={20} color='inherit' />
+                      ) : null
+                    }
+                    disabled={isLoading}>
+                    {isLoading ? 'Refreshing...' : 'Refresh Data'}
+                  </Button>
+                </Box>
+              </Card>
+            </Box>
+
+            <Box sx={{ mt: 3 }}>
+              <Card title='API Debugging Tools'>
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant='h6' gutterBottom>
+                    Public API Detailed Test
+                  </Typography>
+                  <Typography variant='body2' sx={{ mb: 2 }}>
+                    Run detailed API tests with the endpoint:{' '}
+                    <code>{PUBLIC_API_URL}</code>
+                  </Typography>
+                  <Button
+                    variant='contained'
+                    color='primary'
+                    onClick={handleRunApiTests}
+                    disabled={apiTestLoading}
+                    startIcon={
+                      apiTestLoading ? (
+                        <CircularProgress size={20} color='inherit' />
+                      ) : null
+                    }>
+                    {apiTestLoading ? 'Running Tests...' : 'Run API Tests'}
+                  </Button>
+                </Box>
+
+                {apiTestResults && (
+                  <Box>
+                    <Typography variant='h6' gutterBottom>
+                      Test Results
+                    </Typography>
+                    {Object.entries(apiTestResults.tests).map(
+                      ([testName, result]: [string, any]) => (
+                        <Accordion key={testName} sx={{ mb: 1 }}>
+                          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                            <Typography
+                              variant='body1'
+                              color={result.success ? 'success.main' : 'error'}>
+                              {testName} {result.success ? '✅' : '❌'} (
+                              {result.duration}ms)
+                            </Typography>
+                          </AccordionSummary>
+
+                          <AccordionDetails>
+                            {result.success ? (
+                              <Box>
+                                <Typography variant='body2' gutterBottom>
+                                  Response Data:
+                                </Typography>
+                                <Box
+                                  component='pre'
+                                  sx={{
+                                    bgcolor: 'background.paper',
+                                    p: 1,
+                                    borderRadius: 1,
+                                    overflowX: 'auto',
+                                    fontSize: '0.75rem',
+                                  }}>
+                                  {JSON.stringify(result.data, null, 2)}
+                                </Box>
+                              </Box>
+                            ) : (
+                              <Box>
+                                <Typography variant='body2' color='error'>
+                                  Error: {result.error}
+                                </Typography>
+                              </Box>
+                            )}
+                          </AccordionDetails>
+                        </Accordion>
+                      )
+                    )}
+
+                    <Box
+                      sx={{
+                        mt: 2,
+                        p: 2,
+                        bgcolor: 'background.paper',
+                        borderRadius: 1,
+                      }}>
+                      <Typography variant='body1'>
+                        Summary:{' '}
+                        {
+                          Object.values(apiTestResults.tests).filter(
+                            (r: any) => r.success
+                          ).length
+                        }
+                        /{Object.keys(apiTestResults.tests).length} endpoints
+                        successful
+                      </Typography>
+                    </Box>
+                  </Box>
+                )}
+              </Card>
+            </Box>
+          </Box>
+        );
+
       default:
-        return <Typography>Tab content coming soon</Typography>;
+        return <Typography>Selected tab content not available</Typography>;
     }
   };
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography
-        variant='h4'
-        component='h1'
-        sx={{ mb: 3, fontWeight: 'bold' }}>
-        Braidpool Public Explorer
-      </Typography>
+    <Box sx={{ width: '100%' }}>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant='h4' gutterBottom>
+          Braidpool Public Explorer
+        </Typography>
+        <Typography variant='body1' gutterBottom color='text.secondary'>
+          Explore the Braidpool network structure, beads (shares), and
+          statistics
+        </Typography>
+      </Box>
 
+      {/* Search Bar */}
+      <Box sx={{ mb: 2 }}>
+        <TextField
+          fullWidth
+          placeholder='Search by bead hash or miner address'
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyPress={handleSearchKeyPress}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position='start'>
+                <SearchIcon />
+              </InputAdornment>
+            ),
+            endAdornment: (
+              <InputAdornment position='end'>
+                <IconButton onClick={handleSearch} edge='end'>
+                  <SearchIcon />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+
+      {/* Error Display */}
       {error && (
-        <Alert severity='error' sx={{ mb: 3 }}>
+        <Alert severity='error' sx={{ mb: 2 }}>
           {error}
         </Alert>
       )}
 
-      {/* Search bar */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <TextField
-            fullWidth
-            variant='outlined'
-            placeholder='Search by bead hash...'
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position='end'>
-                  <IconButton onClick={handleSearch} edge='end'>
-                    <SearchIcon />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Box>
-      </Paper>
-
       {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
+      <Paper sx={{ mb: 2 }}>
         <Tabs
           value={currentTab}
           onChange={handleTabChange}
-          indicatorColor='primary'
-          textColor='primary'
-          variant='fullWidth'>
+          variant='scrollable'
+          scrollButtons='auto'
+          aria-label='explorer tabs'>
           <Tab label='Overview' value={ExplorerTab.OVERVIEW} />
           <Tab label='Braid Visualization' value={ExplorerTab.BRAID} />
-          <Tab label='Bead Explorer' value={ExplorerTab.BEADS} />
+          <Tab label='Beads' value={ExplorerTab.BEADS} />
           <Tab label='Network Stats' value={ExplorerTab.STATS} />
           <Tab label='About' value={ExplorerTab.ABOUT} />
+          <Tab label='Debug' value={ExplorerTab.DEBUG} />
         </Tabs>
       </Paper>
 
-      {/* Tab content */}
+      {/* Tab Content */}
       {renderTabContent()}
     </Box>
   );
