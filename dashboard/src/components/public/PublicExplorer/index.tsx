@@ -35,7 +35,6 @@ const PublicExplorer: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [braidData, setBraidData] = useState<any>(null);
   const [networkStats, setNetworkStats] = useState<any>(null);
->>>>>>> parent of 0ae49ce (feat: enhance Public API client and dashboard functionality)
   const [currentTab, setCurrentTab] = useState<ExplorerTab>(
     ExplorerTab.OVERVIEW
   );
