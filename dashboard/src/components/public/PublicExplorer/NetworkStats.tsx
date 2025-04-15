@@ -11,11 +11,11 @@ import Card from '../../common/Card';
 // Define the interface for network stats
 interface NetworkStatsProps {
   data: {
-    totalBeads: number;
-    lastUpdate: string;
-    networkHashrate: number;
-    activeMiners: number;
-    averageConfirmationTime: number;
+    totalBeads?: number;
+    lastUpdate?: string;
+    networkHashrate?: string;
+    activeMiners?: number;
+    averageConfirmationTime?: number;
   } | null;
   detailed?: boolean;
 }
@@ -34,10 +34,43 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
     );
   }
 
+  // Utility function to extract number from hashrate string
+  const extractHashrateValue = (hashrateStr: string): number => {
+    try {
+      // Extract the numeric part using regex
+      const match = hashrateStr.match(/(\d+(\.\d+)?)/);
+      if (match && match[1]) {
+        return parseFloat(match[1]);
+      }
+      return 0;
+    } catch (error) {
+      console.error('❌ Error parsing hashrate:', error);
+      return 0;
+    }
+  };
+
+  // Calculate hashrate share based on string value
+  const calculateHashrateShare = (hashrateStr: string): string => {
+    try {
+      const value = extractHashrateValue(hashrateStr);
+      // Note: This is a placeholder calculation
+      return ((value / 320) * 100).toFixed(2);
+    } catch (error) {
+      console.error('❌ Error calculating hashrate share:', error);
+      return '0.00';
+    }
+  };
+
   // Format the last update time
-  const formatLastUpdate = (isoString: string): string => {
-    const date = new Date(isoString);
-    return date.toLocaleString();
+  const formatLastUpdate = (isoString?: string): string => {
+    if (!isoString) return 'Not available';
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleString();
+    } catch (error) {
+      console.error('❌ Error formatting date:', error);
+      return 'Invalid date';
+    }
   };
 
   // Basic stats that are always shown
@@ -46,7 +79,7 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
       <Box sx={{ width: { xs: '100%', sm: '50%', md: '25%' }, p: 1 }}>
         <Paper sx={{ p: 2, bgcolor: 'background.paper', textAlign: 'center' }}>
           <Typography variant='h6' color='primary'>
-            {data.totalBeads.toLocaleString()}
+            {data.totalBeads ? data.totalBeads.toLocaleString() : 'N/A'}
           </Typography>
           <Typography variant='body2' color='text.secondary'>
             Total Beads
@@ -56,7 +89,7 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
       <Box sx={{ width: { xs: '100%', sm: '50%', md: '25%' }, p: 1 }}>
         <Paper sx={{ p: 2, bgcolor: 'background.paper', textAlign: 'center' }}>
           <Typography variant='h6' color='primary'>
-            {data.networkHashrate} TH/s
+            {data.networkHashrate !== undefined ? data.networkHashrate : 'N/A'}
           </Typography>
           <Typography variant='body2' color='text.secondary'>
             Network Hashrate
@@ -66,7 +99,7 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
       <Box sx={{ width: { xs: '100%', sm: '50%', md: '25%' }, p: 1 }}>
         <Paper sx={{ p: 2, bgcolor: 'background.paper', textAlign: 'center' }}>
           <Typography variant='h6' color='primary'>
-            {data.activeMiners}
+            {data.activeMiners !== undefined ? data.activeMiners : 'N/A'}
           </Typography>
           <Typography variant='body2' color='text.secondary'>
             Active Miners
@@ -76,7 +109,9 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
       <Box sx={{ width: { xs: '100%', sm: '50%', md: '25%' }, p: 1 }}>
         <Paper sx={{ p: 2, bgcolor: 'background.paper', textAlign: 'center' }}>
           <Typography variant='h6' color='primary'>
-            {data.averageConfirmationTime} min
+            {data.averageConfirmationTime !== undefined
+              ? `${data.averageConfirmationTime} min`
+              : 'N/A'}
           </Typography>
           <Typography variant='body2' color='text.secondary'>
             Avg. Confirmation Time
@@ -120,7 +155,11 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
                   Average Block Time:
                 </Typography>
                 <Typography variant='body2' component='span' sx={{ ml: 1 }}>
-                  {(data.averageConfirmationTime * 60).toFixed(1)} seconds
+                  {data.averageConfirmationTime !== undefined
+                    ? `${(data.averageConfirmationTime * 60).toFixed(
+                        1
+                      )} seconds`
+                    : 'N/A'}
                 </Typography>
               </Box>
               <Box>
@@ -149,7 +188,9 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
                   Total Miners:
                 </Typography>
                 <Typography variant='body2' component='span' sx={{ ml: 1 }}>
-                  {data.activeMiners + 14}
+                  {data.activeMiners !== undefined
+                    ? data.activeMiners + 14
+                    : 'N/A'}
                 </Typography>
               </Box>
               <Box sx={{ mb: 1 }}>
@@ -160,7 +201,7 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
                   Active Miners:
                 </Typography>
                 <Typography variant='body2' component='span' sx={{ ml: 1 }}>
-                  {data.activeMiners}
+                  {data.activeMiners !== undefined ? data.activeMiners : 'N/A'}
                 </Typography>
               </Box>
               <Box>
@@ -171,8 +212,11 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
                   Pool Hashrate Share:
                 </Typography>
                 <Typography variant='body2' component='span' sx={{ ml: 1 }}>
-                  {((data.networkHashrate / 320) * 100).toFixed(2)}% of global
-                  hashrate
+                  {data.networkHashrate !== undefined
+                    ? `${calculateHashrateShare(
+                        data.networkHashrate
+                      )}% of global hashrate`
+                    : 'N/A'}
                 </Typography>
               </Box>
             </Paper>
