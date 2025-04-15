@@ -61,7 +61,7 @@ const BraidVisualizationOptimized: React.FC<
   // State for visualization
   const [svgWidth, setSvgWidth] = useState(width);
   const [windowStart, setWindowStart] = useState(0);
-  const [windowSize, setWindowSize] = useState(10); // Reduced from 100 to 10 for smaller datasets
+  const [windowSize, setWindowSize] = useState(100); // Show 100 cohorts at a time
   const [totalCohorts, setTotalCohorts] = useState(0);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [visibleData, setVisibleData] = useState<BraidVisualizationData | null>(
@@ -117,50 +117,17 @@ const BraidVisualizationOptimized: React.FC<
       });
 
       if (data?.cohorts) {
-        const cohortCount = data.cohorts.length;
-        setTotalCohorts(cohortCount);
-
-        // Dynamically adjust window size based on total cohorts
-        let dynamicWindowSize = Math.max(5, Math.min(cohortCount, windowSize));
-
-        // For very large datasets (>1000 cohorts), use a larger default window
-        if (cohortCount > 1000) {
-          // For extremely large datasets (>3000), increase default even more
-          if (cohortCount > 3000 && windowSize < 100) {
-            console.log(
-              `🔄 Extremely large dataset detected (${cohortCount} cohorts), increasing window size to 100`
-            );
-            dynamicWindowSize = Math.min(100, cohortCount);
-          }
-          // For large datasets (>1000), use moderate window size
-          else if (windowSize < 50) {
-            console.log(
-              `🔄 Large dataset detected (${cohortCount} cohorts), increasing window size to 50`
-            );
-            dynamicWindowSize = Math.min(50, cohortCount);
-          }
-        }
-
-        if (dynamicWindowSize !== windowSize) {
-          console.log(
-            `🔄 Adjusting window size to ${dynamicWindowSize} for ${cohortCount} total cohorts`
-          );
-          setWindowSize(dynamicWindowSize);
-        }
-
+        setTotalCohorts(data.cohorts.length);
         setStats((prev) => ({
           ...prev,
           totalNodes: data.nodes.length,
-          totalCohorts: cohortCount,
+          totalCohorts: data.cohorts.length,
         }));
       }
 
-      // Initialize window to show the most recent cohorts, but only if we have enough cohorts
+      // Initialize window to show the most recent cohorts
       if (data?.cohorts?.length && data.cohorts.length > windowSize) {
         setWindowStart(data.cohorts.length - windowSize);
-      } else {
-        // For small datasets, start at the beginning
-        setWindowStart(0);
       }
     } catch (error) {
       console.error('❌ Error processing data:', error);
@@ -584,9 +551,6 @@ const BraidVisualizationOptimized: React.FC<
       const minimapWidth = svgWidth * 0.3;
       const minimapHeight = 60;
 
-      // Check if we need to show the minimap
-      const showMinimap = data.cohorts.length > windowSize;
-
       // Draw background
       svg
         .append('rect')
@@ -596,21 +560,7 @@ const BraidVisualizationOptimized: React.FC<
         .attr('stroke', colors.border)
         .attr('stroke-width', 1);
 
-      if (!showMinimap) {
-        // For small datasets, just add a message
-        svg
-          .append('text')
-          .attr('x', minimapWidth / 2)
-          .attr('y', minimapHeight / 2)
-          .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .style('font-size', '10px')
-          .style('fill', colors.textSecondary)
-          .text(`All ${data.cohorts.length} cohorts visible`);
-        return;
-      }
-
-      // Draw cohort indicators (we'll optimize for large datasets)
+      // Draw cohort indicators
       const cohortWidth = minimapWidth / data.cohorts.length;
 
       // For very large datasets, we don't draw individual cohort indicators
@@ -765,7 +715,6 @@ const BraidVisualizationOptimized: React.FC<
   // Handle window navigation
   const handleWindowChange = (event: any, newValue: number | number[]) => {
     if (typeof newValue === 'number') {
-      console.log(`🔄 Window start changed: ${windowStart} → ${newValue}`);
       setWindowStart(newValue);
     }
   };
@@ -898,7 +847,6 @@ const BraidVisualizationOptimized: React.FC<
   // Handle window size change
   const handleWindowSizeChange = (event: any, newValue: number | number[]) => {
     if (typeof newValue === 'number') {
-      console.log(`🔄 Window size changed: ${windowSize} → ${newValue}`);
       setWindowSize(newValue);
     }
   };
@@ -1370,25 +1318,10 @@ const BraidVisualizationOptimized: React.FC<
           onChange={handleWindowChange}
           min={0}
           max={Math.max(0, totalCohorts - windowSize)}
-          step={Math.max(1, Math.floor(totalCohorts / 100))}
-          disabled={totalCohorts <= windowSize}
+          step={1}
           aria-labelledby='cohort-window-slider'
           sx={{ mb: 3 }}
         />
-
-        {totalCohorts <= windowSize && (
-          <Typography
-            variant='caption'
-            sx={{
-              color: colors.textSecondary,
-              display: 'block',
-              textAlign: 'center',
-              mb: 2,
-            }}>
-            All cohorts are currently visible. Slider is disabled because
-            dataset is small.
-          </Typography>
-        )}
 
         {/* Window Size Slider */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -1404,16 +1337,9 @@ const BraidVisualizationOptimized: React.FC<
         <Slider
           value={windowSize}
           onChange={handleWindowSizeChange}
-          min={5}
-          max={
-            totalCohorts > 3000
-              ? Math.min(500, totalCohorts)
-              : totalCohorts > 1000
-              ? Math.min(200, totalCohorts)
-              : Math.max(10, totalCohorts)
-          }
-          step={totalCohorts > 3000 ? 25 : totalCohorts > 1000 ? 10 : 1}
-          disabled={totalCohorts < 10}
+          min={50}
+          max={Math.min(500, totalCohorts)}
+          step={10}
           aria-labelledby='window-size-slider'
           marks={
             totalCohorts > 500
@@ -1430,34 +1356,6 @@ const BraidVisualizationOptimized: React.FC<
               : undefined
           }
         />
-
-        {totalCohorts < 10 && (
-          <Typography
-            variant='caption'
-            sx={{
-              color: colors.textSecondary,
-              display: 'block',
-              textAlign: 'center',
-              mt: 1,
-            }}>
-            Window size slider disabled - not enough cohorts ({totalCohorts}{' '}
-            total)
-          </Typography>
-        )}
-
-        {totalCohorts > 1000 && (
-          <Typography
-            variant='caption'
-            sx={{
-              color: colors.textSecondary,
-              display: 'block',
-              textAlign: 'center',
-              mt: 1,
-            }}>
-            Large dataset detected ({totalCohorts} cohorts) - adjust window size
-            to balance performance and visibility
-          </Typography>
-        )}
       </Box>
 
       {/* Mobile Legend (shown below visualization on small screens) */}
