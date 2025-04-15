@@ -10,6 +10,7 @@ import {
   Typography,
   CircularProgress,
   Alert,
+  Grid,
 } from '@mui/material';
 import colors from '../theme/colors';
 
@@ -23,6 +24,8 @@ import WifiIcon from '@mui/icons-material/Wifi';
 
 // Components
 import BraidVisualization from './BraidVisualization';
+import BraidVisualizationOptimized from './BraidVisualizationOptimized';
+import BraidCohortStats from './BraidCohortStats';
 import TopStatsBar from './TopStatsBar';
 import Card from './common/Card';
 import Header from './Header';
@@ -50,6 +53,8 @@ enum Page {
   MINING_INVENTORY = 'mining-inventory',
   MEMPOOL = 'mempool',
   DAG_VISUALIZATION = 'dag-visualization',
+  DAG_VISUALIZATION_OPTIMIZED = 'dag-visualization-optimized',
+  COHORT_STATS = 'cohort-stats',
   PUBLIC_EXPLORER = 'public-explorer',
   SIMULATOR = 'simulator',
 }
@@ -60,6 +65,11 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>(Page.DASHBOARD);
+  const [perfStats, setPerfStats] = useState({
+    fetchTime: 0,
+    transformTime: 0,
+    lastUpdate: new Date(),
+  });
 
   // Fetch data when component mounts
   useEffect(() => {
@@ -69,14 +79,35 @@ const Dashboard = () => {
         setLoading(true);
         setError(null);
 
+        // Track performance
+        const fetchStart = performance.now();
+
         // Load sample data
         const braidData = await loadSampleBraidData();
+
+        const fetchEnd = performance.now();
+        const fetchTime = fetchEnd - fetchStart;
+
+        const transformStart = performance.now();
 
         // Transform data for visualization
         const transformedData = transformBraidData(braidData);
 
+        const transformEnd = performance.now();
+        const transformTime = transformEnd - transformStart;
+
         setData(transformedData);
-        console.log('✅ Data loaded successfully!');
+        setPerfStats({
+          fetchTime,
+          transformTime,
+          lastUpdate: new Date(),
+        });
+
+        console.log('✅ Data loaded successfully!', {
+          fetchTime: `${fetchTime.toFixed(2)}ms`,
+          transformTime: `${transformTime.toFixed(2)}ms`,
+          totalTime: `${(fetchTime + transformTime).toFixed(2)}ms`,
+        });
       } catch (err) {
         console.error('❌ Error loading data:', err);
         setError('Failed to load data. Please try again later.');
@@ -258,7 +289,67 @@ const Dashboard = () => {
             <LayersIcon fontSize='small' />
           </ListItemIcon>
           <ListItemText
-            primary='Visualize'
+            primary='DAG Visualization'
+            primaryTypographyProps={{ fontSize: '0.875rem' }}
+          />
+        </ListItemButton>
+
+        <ListItemButton
+          onClick={() => setCurrentPage(Page.DAG_VISUALIZATION_OPTIMIZED)}
+          selected={currentPage === Page.DAG_VISUALIZATION_OPTIMIZED}
+          sx={{
+            pl: 2,
+            py: 1.5,
+            borderLeft:
+              currentPage === Page.DAG_VISUALIZATION_OPTIMIZED
+                ? `4px solid ${colors.primary}`
+                : 'none',
+            '&.Mui-selected': {
+              backgroundColor: 'rgba(57, 134, 232, 0.08)',
+            },
+          }}>
+          <ListItemIcon
+            sx={{
+              minWidth: 40,
+              color:
+                currentPage === Page.DAG_VISUALIZATION_OPTIMIZED
+                  ? colors.primary
+                  : colors.textSecondary,
+            }}>
+            <LayersIcon fontSize='small' />
+          </ListItemIcon>
+          <ListItemText
+            primary='Optimized DAG'
+            primaryTypographyProps={{ fontSize: '0.875rem' }}
+          />
+        </ListItemButton>
+
+        <ListItemButton
+          onClick={() => setCurrentPage(Page.COHORT_STATS)}
+          selected={currentPage === Page.COHORT_STATS}
+          sx={{
+            pl: 2,
+            py: 1.5,
+            borderLeft:
+              currentPage === Page.COHORT_STATS
+                ? `4px solid ${colors.primary}`
+                : 'none',
+            '&.Mui-selected': {
+              backgroundColor: 'rgba(57, 134, 232, 0.08)',
+            },
+          }}>
+          <ListItemIcon
+            sx={{
+              minWidth: 40,
+              color:
+                currentPage === Page.COHORT_STATS
+                  ? colors.primary
+                  : colors.textSecondary,
+            }}>
+            <LayersIcon fontSize='small' />
+          </ListItemIcon>
+          <ListItemText
+            primary='Cohort Analysis'
             primaryTypographyProps={{ fontSize: '0.875rem' }}
           />
         </ListItemButton>
@@ -333,85 +424,205 @@ const Dashboard = () => {
         return <InstallationInstructions />;
       case Page.DASHBOARD:
         return (
-          <>
-            <TopStatsBar loading={loading} />
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', mt: 2, mx: -1 }}>
-              <Box sx={{ width: { xs: '100%', md: '50%' }, p: 1 }}>
-                <Card title='Pool Hashrate'>
-                  <PoolHashrateChart loading={loading} />
-                </Card>
-              </Box>
-              <Box sx={{ width: { xs: '100%', md: '50%' }, p: 1 }}>
-                <Card title='Mempool Activity'>
-                  <MempoolLatencyStats />
-                </Card>
-              </Box>
+          <Box sx={{ paddingX: 3, paddingY: 2 }}>
+            <TopStatsBar />
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                marginTop: 2,
+                gap: 2,
+              }}>
+              <Card
+                title='Pool Hashrate'
+                subtitle='Last 24 hours'
+                sx={{
+                  height: '350px',
+                  width: { xs: '100%', md: '100%', lg: '48%' },
+                }}>
+                <PoolHashrateChart />
+              </Card>
+              <Card
+                title='Recent Blocks'
+                subtitle='Last 10 blocks found by pool'
+                sx={{
+                  height: '350px',
+                  width: { xs: '100%', md: '100%', lg: '48%' },
+                }}>
+                <RecentBlocksTable />
+              </Card>
             </Box>
-            <Box sx={{ mt: 2, mx: -1 }}>
-              <Box sx={{ p: 1 }}>
-                <Card title='Recent Blocks'>
-                  <RecentBlocksTable />
-                </Card>
-              </Box>
-            </Box>
-          </>
+          </Box>
         );
       case Page.MINING_INVENTORY:
         return <MineInventoryDashboard />;
       case Page.MEMPOOL:
-        return (
-          <Box sx={{ p: 1 }}>
-            <Card title='Mempool Statistics'>
-              <MempoolLatencyStats />
-            </Card>
-          </Box>
-        );
+        return <MempoolLatencyStats />;
       case Page.DAG_VISUALIZATION:
         return (
-          <Box sx={{ p: 1 }}>
-            <Card title='Braid Visualization'>
+          <Box sx={{ p: 3 }}>
+            <Card
+              title='Directed Acyclic Graph (DAG) Visualization'
+              subtitle='Visual representation of the braid structure'
+              sx={{ p: 2 }}>
               {loading ? (
                 <Box
                   sx={{
                     display: 'flex',
                     justifyContent: 'center',
                     alignItems: 'center',
-                    py: 10,
+                    height: 600,
                   }}>
                   <CircularProgress />
                 </Box>
               ) : error ? (
-                <Alert severity='error' sx={{ my: 2 }}>
-                  {error}
-                </Alert>
+                <Alert severity='error'>{error}</Alert>
               ) : data ? (
-                <Box>
-                  <BraidVisualization data={data} width={900} height={500} />
-                </Box>
+                <BraidVisualization data={data} height={600} />
               ) : (
-                <Typography>No data available</Typography>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: 600,
+                    color: colors.textPrimary,
+                  }}>
+                  <Typography>No data available</Typography>
+                </Box>
+              )}
+            </Card>
+          </Box>
+        );
+      case Page.DAG_VISUALIZATION_OPTIMIZED:
+        console.log('🔍 Rendering DAG_VISUALIZATION_OPTIMIZED', {
+          dataAvailable: !!data,
+          loading,
+          error,
+          dataNodes: data?.nodes?.length,
+          dataLinks: data?.links?.length,
+          dataCohorts: data?.cohorts?.length,
+        });
+        return (
+          <Box sx={{ p: 3 }}>
+            <Card
+              title='Optimized DAG Visualization'
+              subtitle='Enhanced visualization with window and zoom controls'
+              sx={{ p: 2 }}>
+              {loading ? (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: 600,
+                  }}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Alert severity='error'>{error}</Alert>
+              ) : data ? (
+                <BraidVisualizationOptimized data={data} height={600} />
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    height: 600,
+                    color: colors.textPrimary,
+                  }}>
+                  <Typography>No data available</Typography>
+                </Box>
+              )}
+            </Card>
+          </Box>
+        );
+      case Page.COHORT_STATS:
+        return (
+          <Box sx={{ p: 3 }}>
+            <Card
+              title='Cohort Analysis Dashboard'
+              subtitle='Detailed analysis of braid cohort structure'
+              sx={{ p: 2 }}>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Alert severity='error'>{error}</Alert>
+              ) : (
+                <>
+                  <BraidCohortStats
+                    data={data}
+                    loading={loading}
+                    error={error}
+                  />
+
+                  {!loading && !error && perfStats.lastUpdate && (
+                    <Box
+                      sx={{
+                        mt: 2,
+                        p: 2,
+                        backgroundColor: colors.paper,
+                        borderRadius: 1,
+                      }}>
+                      <Typography
+                        variant='subtitle2'
+                        sx={{ mb: 1, color: colors.textSecondary }}>
+                        Performance Metrics
+                      </Typography>
+                      <Grid container spacing={2}>
+                        <Grid item xs={4}>
+                          <Typography
+                            variant='caption'
+                            sx={{ color: colors.textSecondary }}>
+                            Last Refresh:
+                          </Typography>
+                          <Typography
+                            variant='body2'
+                            sx={{ color: colors.textPrimary }}>
+                            {perfStats.lastUpdate.toLocaleTimeString()}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography
+                            variant='caption'
+                            sx={{ color: colors.textSecondary }}>
+                            Fetch Time:
+                          </Typography>
+                          <Typography
+                            variant='body2'
+                            sx={{ color: colors.textPrimary }}>
+                            {perfStats.fetchTime.toFixed(2)}ms
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Typography
+                            variant='caption'
+                            sx={{ color: colors.textSecondary }}>
+                            Transform Time:
+                          </Typography>
+                          <Typography
+                            variant='body2'
+                            sx={{ color: colors.textPrimary }}>
+                            {perfStats.transformTime.toFixed(2)}ms
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
+                </>
               )}
             </Card>
           </Box>
         );
       case Page.PUBLIC_EXPLORER:
-        return (
-          <Box sx={{ p: 1 }}>
-            <PublicExplorer />
-          </Box>
-        );
+        return <PublicExplorer />;
       case Page.SIMULATOR:
-        return (
-          <Box sx={{ p: 1 }}>
-            <SimulatorConnection />
-          </Box>
-        );
+        return <SimulatorConnection />;
       default:
-        return (
-          <Box sx={{ p: 1 }}>
-            <Typography>Coming soon</Typography>
-          </Box>
-        );
+        return <div>Page not found</div>;
     }
   };
 
