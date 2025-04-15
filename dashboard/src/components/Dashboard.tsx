@@ -43,6 +43,9 @@ import {
   transformBraidData,
 } from '../utils/braidDataTransformer';
 
+// Hooks
+import useSimulatorData from '../hooks/useSimulatorData';
+
 // Constants
 const drawerWidth = 240;
 
@@ -70,6 +73,13 @@ const Dashboard = () => {
     transformTime: 0,
     lastUpdate: new Date(),
   });
+
+  // Get simulator data for the full dataset (4999 cohorts)
+  const {
+    visualizationData: simulatorData,
+    isLoading: simulatorLoading,
+    error: simulatorError,
+  } = useSimulatorData();
 
   // Fetch data when component mounts
   useEffect(() => {
@@ -496,12 +506,12 @@ const Dashboard = () => {
         );
       case Page.DAG_VISUALIZATION_OPTIMIZED:
         console.log('🔍 Rendering DAG_VISUALIZATION_OPTIMIZED', {
-          dataAvailable: !!data,
-          loading,
-          error,
-          dataNodes: data?.nodes?.length,
-          dataLinks: data?.links?.length,
-          dataCohorts: data?.cohorts?.length,
+          simulatorDataAvailable: !!simulatorData,
+          simulatorLoading,
+          simulatorError,
+          simulatorNodes: simulatorData?.nodes?.length,
+          simulatorLinks: simulatorData?.links?.length,
+          simulatorCohorts: simulatorData?.cohorts?.length,
         });
         return (
           <Box sx={{ p: 3 }}>
@@ -509,7 +519,7 @@ const Dashboard = () => {
               title='Optimized DAG Visualization'
               subtitle='Enhanced visualization with window and zoom controls'
               sx={{ p: 2 }}>
-              {loading ? (
+              {simulatorLoading ? (
                 <Box
                   sx={{
                     display: 'flex',
@@ -519,10 +529,13 @@ const Dashboard = () => {
                   }}>
                   <CircularProgress />
                 </Box>
-              ) : error ? (
-                <Alert severity='error'>{error}</Alert>
-              ) : data ? (
-                <BraidVisualizationOptimized data={data} height={600} />
+              ) : simulatorError ? (
+                <Alert severity='error'>{simulatorError.message}</Alert>
+              ) : simulatorData ? (
+                <BraidVisualizationOptimized
+                  data={simulatorData}
+                  height={600}
+                />
               ) : (
                 <Box
                   sx={{
