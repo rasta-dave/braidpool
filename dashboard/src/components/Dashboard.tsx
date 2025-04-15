@@ -20,7 +20,6 @@ import ConstructionIcon from '@mui/icons-material/Construction';
 import InventoryIcon from '@mui/icons-material/Inventory';
 import MemoryIcon from '@mui/icons-material/Memory';
 import LayersIcon from '@mui/icons-material/Layers';
-import WifiIcon from '@mui/icons-material/Wifi';
 
 // Components
 import BraidVisualization from './BraidVisualization';
@@ -35,7 +34,6 @@ import PoolHashrateChart from './PoolHashrateChart';
 import MempoolLatencyStats from './MempoolLatencyStats';
 import RecentBlocksTable from './RecentBlocksTable';
 import PublicExplorer from './public/PublicExplorer';
-import SimulatorConnection from './SimulatorConnection';
 
 // Utils
 import {
@@ -59,7 +57,6 @@ enum Page {
   DAG_VISUALIZATION_OPTIMIZED = 'dag-visualization-optimized',
   COHORT_STATS = 'cohort-stats',
   PUBLIC_EXPLORER = 'public-explorer',
-  SIMULATOR = 'simulator',
 }
 
 const Dashboard = () => {
@@ -393,36 +390,6 @@ const Dashboard = () => {
             primaryTypographyProps={{ fontSize: '0.875rem' }}
           />
         </ListItemButton>
-
-        <ListItemButton
-          onClick={() => setCurrentPage(Page.SIMULATOR)}
-          selected={currentPage === Page.SIMULATOR}
-          sx={{
-            pl: 2,
-            py: 1.5,
-            borderLeft:
-              currentPage === Page.SIMULATOR
-                ? `4px solid ${colors.primary}`
-                : 'none',
-            '&.Mui-selected': {
-              backgroundColor: 'rgba(57, 134, 232, 0.08)',
-            },
-          }}>
-          <ListItemIcon
-            sx={{
-              minWidth: 40,
-              color:
-                currentPage === Page.SIMULATOR
-                  ? colors.primary
-                  : colors.textSecondary,
-            }}>
-            <WifiIcon fontSize='small' />
-          </ListItemIcon>
-          <ListItemText
-            primary='Simulator'
-            primaryTypographyProps={{ fontSize: '0.875rem' }}
-          />
-        </ListItemButton>
       </List>
     </Drawer>
   );
@@ -631,9 +598,17 @@ const Dashboard = () => {
           </Box>
         );
       case Page.PUBLIC_EXPLORER:
+<<<<<<< HEAD
         return <PublicExplorer />;
       case Page.SIMULATOR:
         return <SimulatorConnection />;
+=======
+        return (
+          <Box sx={{ p: 1 }}>
+            <PublicExplorer />
+          </Box>
+        );
+>>>>>>> parent of 0ae49ce (feat: enhance Public API client and dashboard functionality)
       default:
         return <div>Page not found</div>;
     }

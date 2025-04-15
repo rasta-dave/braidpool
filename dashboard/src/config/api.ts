@@ -12,13 +12,13 @@ export const PRIVATE_API_URL =
 
 // Default API parameters
 export const DEFAULT_API_PARAMS = {
-  timeout: 60000, // 60 seconds timeout (increased from 15s)
+  timeout: 15000, // 15 seconds timeout
   retries: 3, // Number of retries on failure
 };
 
 // Update frequency (ms)
 export const UPDATE_INTERVALS = {
-  braid: 120000, // Update braid data every 2 minutes (increased from 1 min)
-  stats: 60000, // Update network stats every minute (increased from 30s)
-  notifications: 30000, // Check for notifications every 30 seconds (increased from 15s)
+  braid: 60000, // Update braid data every minute
+  stats: 30000, // Update network stats every 30 seconds
+  notifications: 15000, // Check for notifications every 15 seconds
 };

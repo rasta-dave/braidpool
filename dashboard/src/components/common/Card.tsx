@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Box, Paper, Typography, SxProps, Theme } from '@mui/material';
+import { Box, Paper, Typography } from '@mui/material';
 
 interface CardProps {
   title?: ReactNode;
@@ -7,7 +7,6 @@ interface CardProps {
   children: ReactNode;
   accentColor?: string;
   headerExtra?: ReactNode;
-  sx?: SxProps<Theme>;
 }
 
 /**
@@ -20,7 +19,6 @@ const Card: React.FC<CardProps> = ({
   children,
   accentColor = '#1976d2',
   headerExtra,
-  sx,
 }) => {
   return (
     <Paper
@@ -44,7 +42,6 @@ const Card: React.FC<CardProps> = ({
             backgroundColor: accentColor,
           },
         }),
-        ...sx,
       }}>
       {(title || subtitle || headerExtra) && (
         <Box
