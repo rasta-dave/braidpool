@@ -33,15 +33,6 @@ enum ExplorerTab {
 const PublicExplorer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-<<<<<<< HEAD
-  const [networkStats, setNetworkStats] = useState<any>({
-    totalBeads: 0,
-    lastUpdate: new Date().toISOString(),
-    networkHashrate: '0 PH/s',
-    activeMiners: 0,
-    averageConfirmationTime: 0,
-  });
-=======
   const [braidData, setBraidData] = useState<any>(null);
   const [networkStats, setNetworkStats] = useState<any>(null);
 >>>>>>> parent of 0ae49ce (feat: enhance Public API client and dashboard functionality)
@@ -68,24 +59,7 @@ const PublicExplorer: React.FC = () => {
         const stats = await publicApiClient.getNetworkStats();
         setNetworkStats(stats);
 
-<<<<<<< HEAD
-        // Only update state if component is still mounted
-        if (isMounted.current) {
-          // Map API response to our component's expected format
-          const formattedStats = {
-            totalBeads: stats?.beadCount ?? 0,
-            lastUpdate: stats?.lastUpdated ?? new Date().toISOString(),
-            networkHashrate: stats?.networkHashrate ?? '0 PH/s',
-            activeMiners: stats?.activeMiners ?? 0,
-            averageConfirmationTime: Math.round(Math.random() * 10), // Placeholder since this isn't in the API
-          };
-
-          setNetworkStats(formattedStats);
-          console.log('✅ Network stats loaded successfully!', formattedStats);
-        }
-=======
         console.log('✅ Explorer data loaded successfully!');
->>>>>>> parent of 0ae49ce (feat: enhance Public API client and dashboard functionality)
       } catch (err: any) {
         console.error('❌ Error loading explorer data:', err);
         setError(`Failed to load data: ${err.message || 'Unknown error'}`);
