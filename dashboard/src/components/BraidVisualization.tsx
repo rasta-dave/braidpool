@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
-import { BraidVisualizationData } from '../types/braid';
+import { BraidVisualizationData, BraidNode } from '../types/braid';
 import {
   Box,
   Typography,
@@ -98,18 +98,21 @@ const BraidVisualization: React.FC<BraidVisualizationProps> = ({
     // Draw links first (so they're behind nodes)
     svg
       .append('g')
-      .selectAll('line')
+      .selectAll('path')
       .data(data.links)
       .enter()
-      .append('line')
-      .attr('x1', (d) => dagLayout.get(d.source)?.x || 0)
-      .attr('y1', (d) => dagLayout.get(d.source)?.y || 0)
-      .attr('x2', (d) => dagLayout.get(d.target)?.x || 0)
-      .attr('y2', (d) => dagLayout.get(d.target)?.y || 0)
-      .attr('stroke', (d) =>
-        d.isHighWorkPath ? colors.tipNode : colors.linkColor
-      )
-      .attr('stroke-width', (d) => (d.isHighWorkPath ? 2.5 : 1))
+      .append('path')
+      .attr('d', (d) => {
+        const source = dagLayout.get(d.source) || { x: 0, y: 0 };
+        const target = dagLayout.get(d.target) || { x: 0, y: 0 };
+
+        // Create perfectly straight lines by using a linear path
+        // Instead of using Bezier curves, just use a straight line from source to target
+        return `M${source.x},${source.y} L${target.x},${target.y}`;
+      })
+      .attr('fill', 'none')
+      .attr('stroke', colors.linkColor)
+      .attr('stroke-width', 1.5)
       .attr('stroke-opacity', 0.6)
       .attr('marker-end', 'url(#arrow)');
 
@@ -135,23 +138,29 @@ const BraidVisualization: React.FC<BraidVisualizationProps> = ({
       .data(data.nodes)
       .enter()
       .append('circle')
-      .attr('r', (d) => (d.isTip ? 10 : 8))
+      .attr('r', (d) => (d.isTip ? 10 : 8)) // Only special size for tips
       .attr('cx', (d) => dagLayout.get(d.id)?.x || 0)
       .attr('cy', (d) => dagLayout.get(d.id)?.y || 0)
-      .attr('fill', (d) => colorScale(d.cohort.toString()))
+      .attr('fill', (d) => colorScale(d.cohort.toString())) // Color only by cohort
       .attr('stroke', (d) => (d.isTip ? colors.tipNode : colors.nodeStroke))
-      .attr('stroke-width', (d) => (d.isTip ? 3 : 1.5))
+      .attr('stroke-width', (d) => (d.isTip ? 2.5 : 1.5))
       .on('mouseover', (event, d) => {
         tooltip.transition().duration(200).style('opacity', 0.9);
         tooltip
           .html(
             `
-          <div>
+          <div style="background-color: ${
+            colors.paper
+          }; padding: 8px; border-radius: 4px;">
             <strong>ID:</strong> ${d.id}<br/>
             <strong>Cohort:</strong> ${d.cohort}<br/>
-            <strong>Parents:</strong> ${d.parents.join(', ')}<br/>
-            <strong>Children:</strong> ${d.children.join(', ')}<br/>
-            <strong>Tip:</strong> ${d.isTip ? 'Yes' : 'No'}
+            <strong>Parents:</strong> ${
+              d.parents.length > 0 ? d.parents.join(', ') : 'Genesis'
+            }<br/>
+            <strong>Children:</strong> ${
+              d.children.length > 0 ? d.children.join(', ') : 'Tip'
+            }<br/>
+            ${d.isTip ? '<strong>Tip Node</strong>' : ''}
           </div>
         `
           )
@@ -340,32 +349,6 @@ const BraidVisualization: React.FC<BraidVisualizationProps> = ({
         <Divider sx={{ my: 0.75, backgroundColor: colors.border }} />
 
         <Box sx={{ pt: 0.5 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.75 }}>
-            <Box
-              sx={{
-                width: 10,
-                height: 10,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mr: 0.75,
-                flexShrink: 0,
-              }}>
-              <Box
-                component='hr'
-                sx={{
-                  width: 15,
-                  height: 2,
-                  backgroundColor: colors.tipNode,
-                  border: 'none',
-                }}
-              />
-            </Box>
-            <Typography variant='caption' sx={{ color: colors.textPrimary }}>
-              High-work path
-            </Typography>
-          </Box>
-
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Box
               sx={{
@@ -388,13 +371,13 @@ const BraidVisualization: React.FC<BraidVisualizationProps> = ({
   );
 };
 
-// Helper function to create a DAG layout
+// Create a hierarchical layout
 const createDagLayout = (
   data: BraidVisualizationData,
   width: number,
   height: number
-): Map<number, { x: number; y: number }> => {
-  const nodePositions = new Map<number, { x: number; y: number }>();
+): Map<string, { x: number; y: number }> => {
+  const nodePositions = new Map<string, { x: number; y: number }>();
 
   // Safety check - if no cohorts, create a default layout
   if (!data.cohorts || data.cohorts.length === 0) {
@@ -403,9 +386,9 @@ const createDagLayout = (
     // Create a simple grid layout based on node IDs
     const gridCols = Math.ceil(Math.sqrt(data.nodes.length));
 
-    data.nodes.forEach((node) => {
-      const row = Math.floor(node.id / gridCols);
-      const col = node.id % gridCols;
+    data.nodes.forEach((node, index) => {
+      const row = Math.floor(index / gridCols);
+      const col = index % gridCols;
 
       const x = (col + 1) * (width / (gridCols + 1));
       const y =
@@ -429,7 +412,19 @@ const createDagLayout = (
   data.cohorts.forEach((cohort, cohortIndex) => {
     const x = horizontalSpacing * (cohortIndex + 1);
 
-    cohort.forEach((nodeId, nodeIndex) => {
+    // Sort cohort nodes - highest work path nodes first
+    const sortedCohort = [...cohort].sort((a, b) => {
+      const nodeA = data.nodes.find((n) => n.id === a);
+      const nodeB = data.nodes.find((n) => n.id === b);
+
+      if (nodeA?.isOnHighWorkPath && !nodeB?.isOnHighWorkPath) return -1;
+      if (!nodeA?.isOnHighWorkPath && nodeB?.isOnHighWorkPath) return 1;
+
+      // Convert to string before comparing to avoid numeric comparison issues
+      return a.localeCompare(b);
+    });
+
+    sortedCohort.forEach((nodeId, nodeIndex) => {
       // Center the nodes in each cohort
       const offset = (maxCohortSize - cohort.length) / 2;
       const y = verticalSpacing * (nodeIndex + offset + 1);
@@ -447,7 +442,7 @@ const createDagLayout = (
       // Position orphaned nodes at the right edge
       nodePositions.set(node.id, {
         x: width * 0.9,
-        y: (node.id % 10) * (height / 10) + height * 0.1,
+        y: (data.nodes.indexOf(node) % 10) * (height / 10) + height * 0.1,
       });
     }
   });

@@ -4,24 +4,29 @@ export interface BraidData {
   children: Record<string, number[]>;
   tips: number[];
   cohorts: number[][];
+  work?: Record<number | string, number>;
+  highest_work_path?: (number | string)[];
+  bead_count?: number;
 }
 
 export interface BraidNode {
-  id: number;
-  parents: number[];
-  children: number[];
+  id: string;
+  parents: string[];
+  children: string[];
   cohort: number;
   isTip: boolean;
+  work?: number;
+  isOnHighWorkPath?: boolean;
 }
 
 export interface BraidLink {
-  source: number;
-  target: number;
+  source: string;
+  target: string;
   isHighWorkPath?: boolean;
 }
 
 export interface BraidVisualizationData {
   nodes: BraidNode[];
   links: BraidLink[];
-  cohorts: number[][];
+  cohorts: string[][];
 }

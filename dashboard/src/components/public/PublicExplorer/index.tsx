@@ -11,15 +11,29 @@ import {
   InputAdornment,
   IconButton,
   Grid,
+  Chip,
+  Button,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import Card from '../../common/Card';
-import BraidVisualization from '../../BraidVisualization';
-import publicApiClient from '../../../api/public/client';
+import { BraidVisualization } from '../../visualization';
 import { transformBraidData } from '../../../utils/braidDataTransformer';
+import {
+  normalizeVisualizationData,
+  normalizeRawBraidData,
+} from '../../../utils/dataNormalizer';
 import NetworkStats from './NetworkStats';
 import BeadExplorer from './BeadExplorer';
 import RecentBeadsTable from './RecentBeadsTable';
+import {
+  BraidVisualizationData,
+  BraidNode,
+  BraidLink,
+} from '../../../types/braid';
+import SimpleBraidView from './SimpleBraidView';
+import publicApiClient from '../../../api/public/client';
 
 // Define available tabs as an enum
 enum ExplorerTab {
@@ -29,6 +43,24 @@ enum ExplorerTab {
   STATS = 'stats',
   ABOUT = 'about',
 }
+
+// Create a wrapper component for BraidVisualization that handles type conversions
+const BraidVisWrapper: React.FC<{
+  data: BraidVisualizationData | null;
+  width?: number;
+  height?: number;
+}> = ({ data, width, height }) => {
+  // If no data, pass null directly
+  if (!data)
+    return <BraidVisualization data={null} width={width} height={height} />;
+
+  // Use the normalizeVisualizationData function to ensure consistent data types
+  const normalizedData = normalizeVisualizationData(data);
+
+  return (
+    <BraidVisualization data={normalizedData} width={width} height={height} />
+  );
+};
 
 const PublicExplorer: React.FC = () => {
   const [loading, setLoading] = useState(true);
@@ -40,67 +72,133 @@ const PublicExplorer: React.FC = () => {
   );
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [useSimpleView, setUseSimpleView] = useState(false);
 
   // Fetch data when component mounts
   useEffect(() => {
-    const fetchData = async () => {
+    fetchData();
+  }, []);
+
+  // Define fetchData as separate function for reuse
+  const fetchData = async () => {
+    try {
+      console.log('🔄 Loading blockchain explorer data...');
+      setLoading(true);
+      setError(null);
+
+      // Get braid data from the /test_data endpoint
+      console.log('🔄 Calling publicApiClient.getBraidData()...');
+      const rawData = await publicApiClient.getBraidData();
+
+      // Normalize the raw data to ensure consistent types
+      const data = normalizeRawBraidData(rawData);
+
+      // Validate that the data meets our requirements
+      if (!data) {
+        console.error('❌ API returned null or undefined data');
+        throw new Error('API returned empty data');
+      }
+
+      if (!data.parents || !data.children) {
+        console.error('❌ API data missing required properties', data);
+        throw new Error(
+          'API data missing required parents/children properties'
+        );
+      }
+
+      console.log('📊 Raw data from API:', {
+        // Log relevant properties of the data structure
+        beadCount: data.bead_count || Object.keys(data.parents).length,
+        parentCount: Object.keys(data.parents).length,
+        childrenCount: Object.keys(data.children).length,
+        cohortCount: data.cohorts?.length || 'missing',
+        highestWorkPathLength: data.highest_work_path?.length || 'N/A',
+        tipCount: data.tips?.length || 'calculating...',
+      });
+
+      // Transform data for visualization
+      console.log('🔄 Transforming data with transformBraidData...');
+      const transformedData = transformBraidData(data);
+
+      if (!transformedData) {
+        console.error('❌ Data transformation failed, returned null');
+        throw new Error('Failed to transform data - check console for details');
+      }
+
+      console.log('📊 Transformed data ready for visualization:', {
+        nodes: transformedData?.nodes?.length || 0,
+        links: transformedData?.links?.length || 0,
+        cohorts: transformedData?.cohorts?.length || 0,
+        firstCohort: transformedData?.cohorts?.[0]?.length || 'N/A',
+        sampleNodes: transformedData?.nodes?.slice(0, 3).map((n) => n.id) || [],
+      });
+
+      setBraidData(transformedData);
+
+      // Get network stats
       try {
-        console.log('🔄 Loading blockchain explorer data...');
-        setLoading(true);
-        setError(null);
-
-        // Get braid data
-        const data = await publicApiClient.getBraidData();
-        const transformedData = transformBraidData(data);
-        setBraidData(transformedData);
-
-        // Get network stats
         const stats = await publicApiClient.getNetworkStats();
         setNetworkStats(stats);
-
-        console.log('✅ Explorer data loaded successfully!');
-      } catch (err: any) {
-        console.error('❌ Error loading explorer data:', err);
-        setError(`Failed to load data: ${err.message || 'Unknown error'}`);
-      } finally {
-        setLoading(false);
+      } catch (statsError: any) {
+        console.warn('⚠️ Could not load network stats:', statsError.message);
+        // Continue even if stats fails - not critical
       }
-    };
 
-    fetchData();
+      console.log('✅ Explorer data loaded successfully!');
+    } catch (error: any) {
+      console.error('❌ Error loading explorer data:', error);
+      setError(`Failed to load data: ${error.message}`);
+      setBraidData(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Set up polling interval to keep data fresh
-    const intervalId = setInterval(fetchData, 60000); // Update every minute
+  // Render visualization component based on user preference
+  const renderVisualization = (width?: number, height?: number) => {
+    if (!braidData) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
 
-    return () => clearInterval(intervalId);
-  }, []);
+    return useSimpleView ? (
+      <SimpleBraidView data={braidData} />
+    ) : (
+      <BraidVisWrapper data={braidData} width={width} height={height} />
+    );
+  };
 
   // Handle search
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
     try {
-      console.log(`🔍 Searching for: ${searchQuery}`);
       setLoading(true);
-
-      const results = await publicApiClient.searchBeads(searchQuery);
+      const results = await publicApiClient.searchBeads(searchQuery.trim());
       setSearchResults(results);
-
-      // If we have results, switch to the Beads tab
-      if (results.length > 0) {
-        setCurrentTab(ExplorerTab.BEADS);
-      }
-    } catch (err: any) {
-      console.error('❌ Search error:', err);
-      setError(`Search failed: ${err.message || 'Unknown error'}`);
+      setCurrentTab(ExplorerTab.BEADS);
+    } catch (error: any) {
+      console.error('❌ Search error:', error);
+      setError(`Search failed: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   // Handle tab change
-  const handleTabChange = (_: React.SyntheticEvent, newValue: ExplorerTab) => {
+  const handleTabChange = (
+    event: React.SyntheticEvent,
+    newValue: ExplorerTab
+  ) => {
     setCurrentTab(newValue);
+  };
+
+  // Toggle between visualization modes
+  const handleToggleView = () => {
+    setUseSimpleView(!useSimpleView);
   };
 
   // Render current tab content
@@ -110,21 +208,65 @@ const PublicExplorer: React.FC = () => {
         return (
           <Box sx={{ mt: 2 }}>
             <Grid container spacing={3}>
+              {/* API Status Indicator */}
+              <Grid sx={{ width: '100%', mb: 2 }}>
+                <Card title='API Status'>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, p: 2 }}>
+                    <Chip
+                      label={`Using ${
+                        braidData?.nodes?.length || 0
+                      } nodes from /test_data`}
+                      color='success'
+                      variant='outlined'
+                    />
+                    <Chip
+                      label={`${braidData?.links?.length || 0} connections`}
+                      color='primary'
+                      variant='outlined'
+                    />
+                    <Chip
+                      label={`${braidData?.cohorts?.length || 0} cohorts`}
+                      color='secondary'
+                      variant='outlined'
+                    />
+                  </Box>
+                </Card>
+              </Grid>
+
               {/* Network Stats */}
               <Grid sx={{ width: { xs: '100%', md: '33.333%' } }}>
                 <NetworkStats data={networkStats} />
               </Grid>
 
-              {/* Braid Visualization */}
+              {/* Braid Visualization with view toggle */}
               <Grid sx={{ width: { xs: '100%', md: '66.667%' } }}>
-                <Card title='Braid Visualization'>
-                  {braidData ? (
+                <Card
+                  title='Braid Visualization'
+                  headerExtra={
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={useSimpleView}
+                          onChange={handleToggleView}
+                          size='small'
+                        />
+                      }
+                      label={useSimpleView ? 'Simple View' : 'Graph View'}
+                      sx={{ mr: 1 }}
+                    />
+                  }>
+                  {loading ? (
+                    <Box
+                      sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : error ? (
+                    <Alert severity='error' sx={{ m: 2 }}>
+                      {error}
+                    </Alert>
+                  ) : (
                     <Box>
-                      <BraidVisualization
-                        data={braidData}
-                        width={700}
-                        height={400}
-                      />
+                      {renderVisualization(700, 400)}
                       <Typography
                         variant='body2'
                         sx={{
@@ -133,17 +275,10 @@ const PublicExplorer: React.FC = () => {
                           color: 'text.secondary',
                         }}>
                         The Braidpool DAG structure showing parent-child
-                        relationships between beads. Hover over nodes to see
-                        details.
+                        relationships between beads.{' '}
+                        {!useSimpleView && 'Hover over nodes to see details.'}
                       </Typography>
                     </Box>
-                  ) : loading ? (
-                    <Box
-                      sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                      <CircularProgress />
-                    </Box>
-                  ) : (
-                    <Typography>No data available</Typography>
                   )}
                 </Card>
               </Grid>
@@ -159,27 +294,38 @@ const PublicExplorer: React.FC = () => {
       case ExplorerTab.BRAID:
         return (
           <Box sx={{ mt: 2 }}>
-            <Card title='Braid Visualization (Full View)'>
-              {braidData ? (
-                <Box>
-                  <BraidVisualization
-                    data={braidData}
-                    width={1200}
-                    height={800}
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'flex-end' }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useSimpleView}
+                    onChange={handleToggleView}
+                    size='small'
                   />
+                }
+                label={useSimpleView ? 'Simple View' : 'Graph View'}
+              />
+            </Box>
+            <Card title='Braid Visualization (Full View)'>
+              {loading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                  <CircularProgress />
+                </Box>
+              ) : error ? (
+                <Alert severity='error' sx={{ m: 2 }}>
+                  {error}
+                </Alert>
+              ) : (
+                <Box>
+                  {renderVisualization(1200, 800)}
                   <Typography
                     variant='body2'
                     sx={{ mt: 1, p: 1, bgcolor: 'background.paper' }}>
                     The Braidpool structure shows all mined shares and their
-                    relationships. Hover over nodes to see more details.
+                    relationships.{' '}
+                    {!useSimpleView && 'Hover over nodes to see more details.'}
                   </Typography>
                 </Box>
-              ) : loading ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                  <CircularProgress />
-                </Box>
-              ) : (
-                <Typography>No data available</Typography>
               )}
             </Card>
           </Box>
@@ -258,7 +404,7 @@ const PublicExplorer: React.FC = () => {
         );
 
       default:
-        return <Typography>Tab content coming soon</Typography>;
+        return <Typography>Unknown tab</Typography>;
     }
   };
 
@@ -272,7 +418,14 @@ const PublicExplorer: React.FC = () => {
       </Typography>
 
       {error && (
-        <Alert severity='error' sx={{ mb: 3 }}>
+        <Alert
+          severity='error'
+          sx={{ mb: 3 }}
+          action={
+            <Button color='inherit' size='small' onClick={() => fetchData()}>
+              Retry
+            </Button>
+          }>
           {error}
         </Alert>
       )}

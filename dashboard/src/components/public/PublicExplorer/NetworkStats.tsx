@@ -35,13 +35,23 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
   }
 
   // Utility function to extract number from hashrate string
-  const extractHashrateValue = (hashrateStr: string): number => {
+  const extractHashrateValue = (hashrateValue: string | number): number => {
     try {
-      // Extract the numeric part using regex
-      const match = hashrateStr.match(/(\d+(\.\d+)?)/);
-      if (match && match[1]) {
-        return parseFloat(match[1]);
+      // If it's already a number, just return it
+      if (typeof hashrateValue === 'number') {
+        return hashrateValue;
       }
+
+      // If it's a string, try to extract the numeric part
+      if (typeof hashrateValue === 'string') {
+        const match = hashrateValue.match(/(\d+(\.\d+)?)/);
+        if (match && match[1]) {
+          return parseFloat(match[1]);
+        }
+      }
+
+      // If we couldn't parse it, return 0
+      console.log(`⚠️ Could not parse hashrate value: ${hashrateValue}`);
       return 0;
     } catch (error) {
       console.error('❌ Error parsing hashrate:', error);
@@ -49,10 +59,10 @@ const NetworkStats: React.FC<NetworkStatsProps> = ({
     }
   };
 
-  // Calculate hashrate share based on string value
-  const calculateHashrateShare = (hashrateStr: string): string => {
+  // Calculate hashrate share based on value
+  const calculateHashrateShare = (hashrateValue: string | number): string => {
     try {
-      const value = extractHashrateValue(hashrateStr);
+      const value = extractHashrateValue(hashrateValue);
       // Note: This is a placeholder calculation
       return ((value / 320) * 100).toFixed(2);
     } catch (error) {

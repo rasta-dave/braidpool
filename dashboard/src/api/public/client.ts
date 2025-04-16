@@ -73,27 +73,108 @@ export class PublicApiClient {
   }
 
   /**
-   * Fetch the current braid structure
+   * Fetch the current braid structure from the test_data endpoint
+   * and transform it to match the expected BraidData format
    */
   async getBraidData(): Promise<BraidData> {
     try {
-      console.log('🔄 Fetching braid data...');
+      console.log('🔄 Fetching braid data from /test_data endpoint...');
 
-      // For initial development, use mock data
-      // TODO: Replace with actual API call
-      // return await this.fetchWithRetry<BraidData>(`${this.baseUrl}/braid`);
-
-      // Using loadSampleBraidData as a temporary measure
-      const { loadSampleBraidData } = await import(
-        '../../utils/braidDataTransformer'
+      // Connect to the /test_data endpoint
+      const testData = await this.fetchWithRetry<any>(
+        `${this.baseUrl}/test_data`
       );
-      const data = await loadSampleBraidData();
-      console.log('✅ Braid data loaded (from sample)');
-      return data;
-    } catch (error) {
+
+      // Validate the response data
+      if (!testData) {
+        throw new Error('API returned empty data');
+      }
+
+      // Check for required properties
+      const requiredProps = ['parents', 'children'];
+      const missingProps = requiredProps.filter((prop) => !testData[prop]);
+
+      if (missingProps.length > 0) {
+        console.error(
+          '❌ API response missing required properties:',
+          missingProps
+        );
+        console.error('Response data:', testData);
+        throw new Error(
+          `API response missing required properties: ${missingProps.join(', ')}`
+        );
+      }
+
+      // Check that parents and children are objects
+      if (
+        typeof testData.parents !== 'object' ||
+        typeof testData.children !== 'object'
+      ) {
+        console.error(
+          '❌ API response has invalid data types for parents/children'
+        );
+        throw new Error('Invalid data types in API response');
+      }
+
+      console.log('✅ Successfully fetched data from test_data endpoint', {
+        bead_count: testData.bead_count || 'N/A',
+        parents_count: Object.keys(testData.parents || {}).length,
+        children_count: Object.keys(testData.children || {}).length,
+        cohorts: testData.cohorts?.length || 'N/A',
+        highest_work_path: testData.highest_work_path?.length || 'N/A',
+      });
+
+      // Convert to the expected BraidData format
+      const braidData: BraidData = {
+        description: 'Braidpool DAG structure from test_data endpoint',
+        parents: testData.parents,
+        children: testData.children,
+        // Calculate tips as beads with no children
+        tips: this.findTips(testData.parents, testData.children),
+        cohorts: testData.cohorts || [],
+        work: testData.work || {},
+        highest_work_path: testData.highest_work_path || [],
+        bead_count: testData.bead_count || Object.keys(testData.parents).length,
+      };
+
+      // Add sample debugging output
+      console.log(
+        '🔍 Sample parents:',
+        Object.entries(braidData.parents).slice(0, 2)
+      );
+      console.log(
+        '🔍 Sample children:',
+        Object.entries(braidData.children).slice(0, 2)
+      );
+
+      if (braidData.cohorts.length > 0) {
+        console.log('🔍 First cohort sample:', braidData.cohorts[0]);
+      } else {
+        console.warn('⚠️ No cohorts data available from API');
+      }
+
+      return braidData;
+    } catch (error: any) {
+      // Provide detailed error information
       console.error('❌ Error fetching braid data:', error);
-      throw error;
+      console.error(`⚠️ API endpoint: ${this.baseUrl}/test_data`);
+      console.error(`⚠️ Error details: ${error.message}`);
+
+      // Throw the error to be handled by the component
+      throw new Error(`Failed to fetch data from API: ${error.message}`);
     }
+  }
+
+  /**
+   * Utility method to find tips (beads with no children)
+   */
+  private findTips(
+    parents: Record<string, number[]>,
+    children: Record<string, number[]>
+  ): number[] {
+    return Object.keys(parents)
+      .filter((id) => !children[id] || children[id].length === 0)
+      .map((id) => parseInt(id));
   }
 
   /**
