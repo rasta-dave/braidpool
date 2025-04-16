@@ -13,8 +13,9 @@
  * - No interactive features beyond basic display
  */
 
-import React, { useMemo } from 'react';
-import { Box, Typography, Paper } from '@mui/material';
+import React, { useMemo, useState, useEffect } from 'react';
+import { Box, Typography, Paper, Chip, Stack, Button } from '@mui/material';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import {
   mockNetworkStats,
   nodePositions,
@@ -34,72 +35,175 @@ const OverviewBraidVisualization: React.FC<{
   darkMode?: boolean;
 }> = ({ height = 400, darkMode = true }) => {
   const colors = getDefaultColors(darkMode);
-  const svgHeight = height - 80; // Leave space for stats
+  const [highlightPath, setHighlightPath] = useState<boolean>(true);
+  const [ready, setReady] = useState<boolean>(false);
+
+  // Calculate dimensions to better fit an overview context
+  const svgHeight = height - 50; // More space for visualization, smaller stats section
+  const borderRadius = 2; // Slightly more rounded for a modern look
+
+  // Add small animation effect on load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setReady(true);
+      console.log('🎬 Visualization ready!');
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Sample key statistics for easy reference
+  const keyStats = {
+    nodes: mockNetworkStats.nodeCount,
+    connections: mockNetworkStats.linkCount,
+    cohorts: mockNetworkStats.cohortCount,
+    tips: mockNetworkStats.tipCount,
+  };
 
   // Pre-compute node positions and colors for better performance
-  const { nodeElements, linkElements } = useMemo(() => {
-    // Only show a subset of the data for better performance
-    const visibleLinks = links.slice(0, 40);
-    const visibleNodes = nodePositions.slice(0, 30);
+  const { nodeElements, linkElements, pathElements } = useMemo(() => {
+    // Get min/max coordinates to ensure proper scaling
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
 
-    // Pre-compute link elements
-    const linkElements = visibleLinks
+    nodePositions.forEach((node) => {
+      minX = Math.min(minX, node.x);
+      maxX = Math.max(maxX, node.x);
+      minY = Math.min(minY, node.y);
+      maxY = Math.max(maxY, node.y);
+    });
+
+    const padding = 50; // Padding around visualization
+    const width = 1000 - padding * 2;
+    const height = 500 - padding * 2;
+
+    // Function to scale coordinates to fit the viewport with padding
+    const scaleX = (x: number) =>
+      padding + ((x - minX) / (maxX - minX)) * width;
+    const scaleY = (y: number) =>
+      padding + ((y - minY) / (maxY - minY)) * height;
+
+    // Show more nodes for clearer visualization in overview
+    const visibleLinks = links.slice(0, 50);
+    const visibleNodes = nodePositions.slice(0, 40);
+
+    // Pre-compute link elements - draw regular links first
+    const regularLinks = visibleLinks
+      .filter(
+        (link) =>
+          !highWorkPath.includes(link.source) ||
+          !highWorkPath.includes(link.target)
+      )
       .map((link, i) => {
         const source = nodePositions.find((n) => n.id === link.source);
         const target = nodePositions.find((n) => n.id === link.target);
 
         if (!source || !target) return null;
 
-        const isHighlighted =
-          highWorkPath.includes(link.source) &&
-          highWorkPath.includes(link.target);
-
         return (
           <line
             key={`link-${i}`}
-            x1={source.x * 1000}
-            y1={source.y * 500}
-            x2={target.x * 1000}
-            y2={target.y * 500}
-            stroke={isHighlighted ? colors.highWorkPathColor : colors.linkColor}
-            strokeWidth={isHighlighted ? 2 : 1}
-            opacity={isHighlighted ? 0.9 : 0.5}
+            x1={scaleX(source.x)}
+            y1={scaleY(source.y)}
+            x2={scaleX(target.x)}
+            y2={scaleY(target.y)}
+            stroke={colors.linkColor}
+            strokeWidth={1}
+            opacity={0.4}
           />
         );
       })
       .filter(Boolean);
 
-    // Pre-compute node elements
-    const nodeElements = visibleNodes.map((node, i) => {
-      const isHighlighted = highWorkPath.includes(node.id);
-      const radius = isHighlighted ? 8 : 6;
+    // Pre-compute high-work path links separately
+    const pathLinks = visibleLinks
+      .filter(
+        (link) =>
+          highWorkPath.includes(link.source) &&
+          highWorkPath.includes(link.target)
+      )
+      .map((link, i) => {
+        const source = nodePositions.find((n) => n.id === link.source);
+        const target = nodePositions.find((n) => n.id === link.target);
 
-      // Get cohort for color
-      const cohortIndex = cohortGroups.findIndex((cohort) =>
-        cohort.nodes.includes(node.id)
-      );
+        if (!source || !target) return null;
 
-      // Use the correct properties from BraidColorTheme
-      const fillColor = isHighlighted
-        ? colors.highWorkPathColor
-        : cohortIndex >= 0 && cohortIndex < colors.nodeColors.length
-        ? colors.nodeColors[cohortIndex]
-        : colors.nodeColors[0]; // Use first color as default
+        return (
+          <line
+            key={`path-link-${i}`}
+            x1={scaleX(source.x)}
+            y1={scaleY(source.y)}
+            x2={scaleX(target.x)}
+            y2={scaleY(target.y)}
+            stroke={colors.highWorkPathColor}
+            strokeWidth={2.5}
+            opacity={0.85}
+          />
+        );
+      })
+      .filter(Boolean);
 
-      return (
-        <circle
-          key={`node-${i}`}
-          cx={node.x * 1000}
-          cy={node.y * 500}
-          r={radius}
-          fill={fillColor}
-          stroke={colors.nodeStrokeColor}
-          strokeWidth={1}
-        />
-      );
-    });
+    // Pre-compute regular node elements
+    const regularNodes = visibleNodes
+      .filter((node) => !highWorkPath.includes(node.id))
+      .map((node, i) => {
+        // Get cohort for color
+        const cohortIndex = cohortGroups.findIndex((cohort) =>
+          cohort.nodes.includes(node.id)
+        );
 
-    return { nodeElements, linkElements };
+        // Use the correct properties from BraidColorTheme
+        const fillColor =
+          cohortIndex >= 0 && cohortIndex < colors.nodeColors.length
+            ? colors.nodeColors[cohortIndex]
+            : colors.nodeColors[0];
+
+        return (
+          <circle
+            key={`node-${i}`}
+            cx={scaleX(node.x)}
+            cy={scaleY(node.y)}
+            r={5}
+            fill={fillColor}
+            stroke={colors.nodeStrokeColor}
+            strokeWidth={0.5}
+            opacity={0.8}
+          />
+        );
+      });
+
+    // Pre-compute high-work path node elements
+    const pathNodes = visibleNodes
+      .filter((node) => highWorkPath.includes(node.id))
+      .map((node, i) => {
+        return (
+          <circle
+            key={`path-node-${i}`}
+            cx={scaleX(node.x)}
+            cy={scaleY(node.y)}
+            r={7}
+            fill={colors.highWorkPathColor}
+            stroke={colors.nodeStrokeColor}
+            strokeWidth={1}
+            opacity={0.9}
+          />
+        );
+      });
+
+    // Print out bounding info for debugging
+    console.log(`📊 DAG bounds: X(${minX}-${maxX}), Y(${minY}-${maxY})`);
+    console.log(
+      `🎯 First node rendered at: (${scaleX(visibleNodes[0].x)}, ${scaleY(
+        visibleNodes[0].y
+      )})`
+    );
+
+    return {
+      nodeElements: regularNodes,
+      linkElements: regularLinks,
+      pathElements: { links: pathLinks, nodes: pathNodes },
+    };
   }, [colors]); // Only recompute when colors change (dark mode toggle)
 
   // Print the number of elements we're rendering for debugging
@@ -107,20 +211,26 @@ const OverviewBraidVisualization: React.FC<{
     `🔍 Rendering Overview Braid: ${linkElements.length} links, ${nodeElements.length} nodes`
   );
 
+  const toggleHighlightPath = () => {
+    setHighlightPath(!highlightPath);
+  };
+
   return (
-    <Box sx={{ width: '100%' }}>
+    <Box sx={{ width: '100%', position: 'relative' }}>
       <Paper
-        elevation={1}
+        elevation={2}
         sx={{
           height: height,
           overflow: 'hidden',
-          borderRadius: 1,
+          borderRadius,
           backgroundColor: darkMode
-            ? 'rgba(30, 30, 30, 0.8)'
-            : 'rgba(245, 245, 245, 0.8)',
+            ? 'rgba(25, 25, 30, 0.85)'
+            : 'rgba(250, 250, 250, 0.9)',
+          backdropFilter: 'blur(4px)',
+          position: 'relative',
         }}>
-        {/* SVG Visualization - Simple version */}
-        <Box sx={{ height: svgHeight, p: 1 }}>
+        {/* SVG Visualization - Optimized for overview */}
+        <Box sx={{ height: svgHeight, p: 1, position: 'relative' }}>
           <svg
             width='100%'
             height='100%'
@@ -132,63 +242,143 @@ const OverviewBraidVisualization: React.FC<{
               y='0'
               width='1000'
               height='500'
-              fill={darkMode ? '#1a1a1a' : '#f5f5f5'}
+              fill={darkMode ? '#1a1a1a' : '#f8f8f8'}
+              rx={8}
             />
 
-            {/* Render pre-computed elements */}
-            <g>{linkElements}</g>
-            <g>{nodeElements}</g>
+            {/* Render pre-computed elements with a simple opacity animation */}
+            <g
+              opacity={ready ? '1' : '0'}
+              style={{ transition: 'opacity 0.3s ease-in' }}>
+              <g>{linkElements}</g>
+              {highlightPath && (
+                <>
+                  <g>{pathElements.links}</g>
+                  <g>{pathElements.nodes}</g>
+                </>
+              )}
+              <g>{nodeElements}</g>
+            </g>
 
-            {/* Overview Text */}
-            <text x='20' y='30' fill={colors.textColor} fontSize='14'>
-              Braidpool DAG Structure (Simplified View)
+            {/* Overview Labels */}
+            <text
+              x='20'
+              y='30'
+              fill={colors.textColor}
+              fontSize='14'
+              fontWeight='500'>
+              Braidpool DAG Visualization
             </text>
+            {highlightPath && (
+              <text x='20' y='55' fill={colors.highWorkPathColor} fontSize='12'>
+                High-Work Path Highlighted
+              </text>
+            )}
           </svg>
+
+          {/* Overlay button to toggle path highlight */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              zIndex: 2,
+            }}>
+            <Button
+              size='small'
+              variant='text'
+              onClick={toggleHighlightPath}
+              sx={{
+                color: highlightPath
+                  ? colors.highWorkPathColor
+                  : colors.textColor,
+                backgroundColor: darkMode
+                  ? 'rgba(0,0,0,0.3)'
+                  : 'rgba(255,255,255,0.5)',
+                fontSize: '0.75rem',
+                textTransform: 'none',
+                '&:hover': {
+                  backgroundColor: darkMode
+                    ? 'rgba(0,0,0,0.5)'
+                    : 'rgba(255,255,255,0.7)',
+                },
+              }}>
+              {highlightPath ? 'Hide Path' : 'Show High-Work Path'}
+            </Button>
+          </Box>
         </Box>
 
-        {/* Stats at bottom */}
-        <Box
+        {/* Compact Stats at bottom */}
+        <Stack
+          direction='row'
+          spacing={2}
+          justifyContent='space-between'
+          alignItems='center'
           sx={{
-            p: 2,
+            px: 2,
+            py: 1,
             borderTop: `1px solid ${
-              darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'
+              darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)'
             }`,
-            display: 'flex',
-            justifyContent: 'space-between',
+            backgroundColor: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.01)',
           }}>
-          <Typography
-            variant='body2'
-            color={darkMode ? 'white' : 'text.primary'}>
-            <strong>Nodes:</strong> {mockNetworkStats.nodeCount}
-          </Typography>
+          {/* Left side: network stats */}
+          <Stack direction='row' spacing={1.5} flexWrap='wrap'>
+            <Chip
+              size='small'
+              variant='outlined'
+              label={`${keyStats.nodes} Beads`}
+              sx={{
+                color: darkMode ? 'white' : 'text.primary',
+                borderColor: darkMode
+                  ? 'rgba(255,255,255,0.2)'
+                  : 'rgba(0,0,0,0.2)',
+              }}
+            />
+            <Chip
+              size='small'
+              variant='outlined'
+              label={`${keyStats.connections} Links`}
+              sx={{
+                color: darkMode ? 'white' : 'text.primary',
+                borderColor: darkMode
+                  ? 'rgba(255,255,255,0.2)'
+                  : 'rgba(0,0,0,0.2)',
+              }}
+            />
+            <Chip
+              size='small'
+              variant='outlined'
+              label={`${keyStats.cohorts} Cohorts`}
+              sx={{
+                color: darkMode ? 'white' : 'text.primary',
+                borderColor: darkMode
+                  ? 'rgba(255,255,255,0.2)'
+                  : 'rgba(0,0,0,0.2)',
+              }}
+            />
+          </Stack>
 
-          <Typography
-            variant='body2'
-            color={darkMode ? 'white' : 'text.primary'}>
-            <strong>Connections:</strong> {mockNetworkStats.linkCount}
-          </Typography>
-
-          <Typography
-            variant='body2'
-            color={darkMode ? 'white' : 'text.primary'}>
-            <strong>Cohorts:</strong> {mockNetworkStats.cohortCount}
-          </Typography>
-
-          <Typography
-            variant='body2'
-            color={darkMode ? 'white' : 'text.primary'}>
-            <strong>Tips:</strong> {mockNetworkStats.tipCount}
-          </Typography>
-        </Box>
+          {/* Right side: full view link */}
+          <Button
+            size='small'
+            endIcon={<ArrowForwardIcon fontSize='small' />}
+            variant='text'
+            component='a'
+            href='#braid-visualization'
+            sx={{
+              color: darkMode ? 'white' : 'text.primary',
+              fontSize: '0.8rem',
+              '&:hover': {
+                backgroundColor: darkMode
+                  ? 'rgba(255,255,255,0.05)'
+                  : 'rgba(0,0,0,0.05)',
+              },
+            }}>
+            Full Visualization
+          </Button>
+        </Stack>
       </Paper>
-
-      <Typography
-        variant='body2'
-        color='text.secondary'
-        sx={{ mt: 1, fontSize: '0.8rem', textAlign: 'center' }}>
-        View the <strong>Braid Visualization</strong> tab for a fully
-        interactive experience
-      </Typography>
     </Box>
   );
 };
