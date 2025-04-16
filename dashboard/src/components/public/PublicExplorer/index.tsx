@@ -34,6 +34,7 @@ import {
 } from '../../../types/braid';
 import SimpleBraidView from './SimpleBraidView';
 import publicApiClient from '../../../api/public/client';
+import StaticBraidWrapper from './StaticBraidWrapper';
 
 // Define available tabs as an enum
 enum ExplorerTab {
@@ -73,6 +74,8 @@ const PublicExplorer: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [useSimpleView, setUseSimpleView] = useState(false);
+  const [useStaticVisualization, setUseStaticVisualization] =
+    useState<boolean>(true);
 
   // Fetch data when component mounts
   useEffect(() => {
@@ -164,6 +167,11 @@ const PublicExplorer: React.FC = () => {
       );
     }
 
+    // Use static visualization for reliability during demos
+    if (useStaticVisualization) {
+      return <StaticBraidWrapper height={height} darkMode={true} />;
+    }
+
     return useSimpleView ? (
       <SimpleBraidView data={braidData} />
     ) : (
@@ -199,6 +207,10 @@ const PublicExplorer: React.FC = () => {
   // Toggle between visualization modes
   const handleToggleView = () => {
     setUseSimpleView(!useSimpleView);
+  };
+
+  const handleToggleVisualizationMode = () => {
+    setUseStaticVisualization(!useStaticVisualization);
   };
 
   // Render current tab content
@@ -243,17 +255,29 @@ const PublicExplorer: React.FC = () => {
                 <Card
                   title='Braid Visualization'
                   headerExtra={
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={useSimpleView}
-                          onChange={handleToggleView}
-                          size='small'
-                        />
-                      }
-                      label={useSimpleView ? 'Simple View' : 'Graph View'}
-                      sx={{ mr: 1 }}
-                    />
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={useStaticVisualization}
+                            onChange={handleToggleVisualizationMode}
+                            color='primary'
+                          />
+                        }
+                        label='Use Demo View'
+                        sx={{ mr: 2 }}
+                      />
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={useSimpleView}
+                            onChange={handleToggleView}
+                            disabled={useStaticVisualization}
+                          />
+                        }
+                        label='Simple View'
+                      />
+                    </Box>
                   }>
                   {loading ? (
                     <Box
