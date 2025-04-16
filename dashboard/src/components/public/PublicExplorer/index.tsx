@@ -35,6 +35,7 @@ import {
 import SimpleBraidView from './SimpleBraidView';
 import publicApiClient from '../../../api/public/client';
 import StaticBraidWrapper from './StaticBraidWrapper';
+import OverviewBraidVisualization from './OverviewBraidVisualization';
 
 // Define available tabs as an enum
 enum ExplorerTab {
@@ -167,11 +168,8 @@ const PublicExplorer: React.FC = () => {
       );
     }
 
-    // Use static visualization for reliability during demos
-    if (useStaticVisualization) {
-      return <StaticBraidWrapper height={height} darkMode={true} />;
-    }
-
+    // Since we now handle StaticBraidWrapper directly in both tabs,
+    // this function only needs to handle the dynamic visualizations
     return useSimpleView ? (
       <SimpleBraidView data={braidData} />
     ) : (
@@ -250,35 +248,9 @@ const PublicExplorer: React.FC = () => {
                 <NetworkStats data={networkStats} />
               </Grid>
 
-              {/* Braid Visualization with view toggle */}
+              {/* Braid Visualization - now using the dedicated component */}
               <Grid sx={{ width: { xs: '100%', md: '66.667%' } }}>
-                <Card
-                  title='Braid Visualization'
-                  headerExtra={
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={useStaticVisualization}
-                            onChange={handleToggleVisualizationMode}
-                            color='primary'
-                          />
-                        }
-                        label='Use Demo View'
-                        sx={{ mr: 2 }}
-                      />
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={useSimpleView}
-                            onChange={handleToggleView}
-                            disabled={useStaticVisualization}
-                          />
-                        }
-                        label='Simple View'
-                      />
-                    </Box>
-                  }>
+                <Card title='Braid Visualization'>
                   {loading ? (
                     <Box
                       sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -290,18 +262,11 @@ const PublicExplorer: React.FC = () => {
                     </Alert>
                   ) : (
                     <Box>
-                      {renderVisualization(700, 400)}
-                      <Typography
-                        variant='body2'
-                        sx={{
-                          mt: 1,
-                          fontSize: '0.85rem',
-                          color: 'text.secondary',
-                        }}>
-                        The Braidpool DAG structure showing parent-child
-                        relationships between beads.{' '}
-                        {!useSimpleView && 'Hover over nodes to see details.'}
-                      </Typography>
+                      {/* Always use the simplified visualization for the overview tab */}
+                      <OverviewBraidVisualization
+                        height={400}
+                        darkMode={true}
+                      />
                     </Box>
                   )}
                 </Card>
@@ -322,13 +287,26 @@ const PublicExplorer: React.FC = () => {
               <FormControlLabel
                 control={
                   <Switch
-                    checked={useSimpleView}
-                    onChange={handleToggleView}
-                    size='small'
+                    checked={useStaticVisualization}
+                    onChange={handleToggleVisualizationMode}
+                    color='primary'
                   />
                 }
-                label={useSimpleView ? 'Simple View' : 'Graph View'}
+                label='Use Demo View'
+                sx={{ mr: 2 }}
               />
+              {!useStaticVisualization && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={useSimpleView}
+                      onChange={handleToggleView}
+                      size='small'
+                    />
+                  }
+                  label={useSimpleView ? 'Simple View' : 'Graph View'}
+                />
+              )}
             </Box>
             <Card title='Braid Visualization (Full View)'>
               {loading ? (
@@ -341,13 +319,19 @@ const PublicExplorer: React.FC = () => {
                 </Alert>
               ) : (
                 <Box>
-                  {renderVisualization(1200, 800)}
+                  {useStaticVisualization ? (
+                    <StaticBraidWrapper height={800} darkMode={true} />
+                  ) : (
+                    renderVisualization(1200, 800)
+                  )}
                   <Typography
                     variant='body2'
                     sx={{ mt: 1, p: 1, bgcolor: 'background.paper' }}>
                     The Braidpool structure shows all mined shares and their
                     relationships.{' '}
-                    {!useSimpleView && 'Hover over nodes to see more details.'}
+                    {!useSimpleView &&
+                      !useStaticVisualization &&
+                      'Hover over nodes to see more details.'}
                   </Typography>
                 </Box>
               )}

@@ -1,3 +1,14 @@
+/**
+ * StaticBraidWrapper.tsx
+ *
+ * A wrapper component for the fully-featured StaticBraidVisualization component.
+ * This component is primarily used in the BRAID VISUALIZATION tab, providing a rich
+ * interactive experience with the full set of visualization features.
+ *
+ * Note: For the Overview tab, we use the separate OverviewBraidVisualization component
+ * which is a simplified version optimized for that context.
+ */
+
 import React from 'react';
 import { Box, Typography, Paper } from '@mui/material';
 import { mockNetworkStats } from './mock/BraidMockData';
