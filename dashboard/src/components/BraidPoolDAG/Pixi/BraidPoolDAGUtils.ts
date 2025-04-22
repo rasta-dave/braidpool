@@ -111,20 +111,40 @@ export const layoutNodesOptimized = (
   setCachedHwpLength: (length: number) => void
 ): Record<string, Position> => {
   console.log(
-    `🧩 Laying out ${allNodes.length} nodes - using optimized approach`
+    `🧩 Laying out ${allNodes.length} nodes - using optimized approach. Limiting to ${selectedCohorts} cohorts.`
   );
 
-  // Fast layout mode for large graphs (> 1000 nodes)
-  const fastLayoutMode = allNodes.length > 1000;
-  if (fastLayoutMode) {
-    console.log('⚡ Using simplified layout for large graph');
-  }
+  // Only process cohorts we need (based on selected number to display)
+  const visibleCohorts = cohorts.slice(-selectedCohorts);
+  console.log(
+    `📊 Showing latest ${selectedCohorts} cohorts out of ${cohorts.length} total cohorts`
+  );
 
-  // Use a cached layout if we have the same number of nodes
-  // This improves performance on subsequent rerenders
+  // For performance, pre-calculate cohort map
+  const cohortMap = new Map<string, number>();
+
+  // Map all nodes to their cohorts
+  visibleCohorts.forEach((cohort, index) => {
+    cohort.forEach((nodeId) => cohortMap.set(nodeId, index));
+  });
+
+  // Create a set of all visible nodes to filter the graph
+  const visibleNodeSet = new Set(visibleCohorts.flat());
+  console.log(
+    `👁️ Visible nodes: ${visibleNodeSet.size} out of ${allNodes.length} total nodes`
+  );
+
+  // Filter nodes to only include those in visible cohorts
+  const visibleNodes = allNodes.filter((node) => visibleNodeSet.has(node.id));
+  console.log(`🔍 Using ${visibleNodes.length} nodes for layout`);
+
+  // Cache key should include selectedCohorts to ensure we regenerate when it changes
+  const cacheKey = `${visibleNodes.length}-${hwPath.length}-${selectedCohorts}`;
+
+  // Invalidate cache if number of cohorts changed
   if (
     cachedLayout &&
-    Object.keys(cachedLayout).length === allNodes.length &&
+    Object.keys(cachedLayout).length === visibleNodes.length &&
     cachedHwpLength === hwPath.length
   ) {
     console.log('📑 Using cached layout - instant positioning');
@@ -135,27 +155,22 @@ export const layoutNodesOptimized = (
   const positions: Record<string, Position> = {};
   const columnOccupancy: Record<number, number> = {};
   const hwPathSet = new Set(hwPath);
-  const centerY = height / 3;
-
-  // For performance, pre-calculate cohort map
-  const cohortMap = new Map<string, number>();
-
-  // Only process cohorts we need (based on selected number to display)
-  const visibleCohorts = cohorts.slice(-selectedCohorts);
-  visibleCohorts.forEach((cohort, index) => {
-    cohort.forEach((nodeId) => cohortMap.set(nodeId, index));
-  });
-
-  // Identify which nodes are visible based on selected cohorts
-  const visibleNodeSet = new Set(visibleCohorts.flat());
+  // Use exactly height/2 as in the original algorithm
+  const centerY = height / 2;
 
   // We position the highest work path (HWP) first - this is the backbone
+  // Only include HWP nodes that are in visible cohorts
+  const visibleHwPath = hwPath.filter((id) => visibleNodeSet.has(id));
+  console.log(
+    `🔝 Visible HWP nodes: ${visibleHwPath.length} out of ${hwPath.length} total`
+  );
+
   let currentX = margin.left;
   let prevCohort: number | undefined;
   const hwPathColumns: number[] = [];
 
-  // Position HWP nodes - this stays largely the same as it's important for the structure
-  hwPath.forEach((nodeId, index) => {
+  // Position visible HWP nodes
+  visibleHwPath.forEach((nodeId, index) => {
     const currentCohort = cohortMap.get(nodeId);
 
     if (prevCohort !== undefined && currentCohort !== prevCohort) {
@@ -170,138 +185,97 @@ export const layoutNodesOptimized = (
     currentX += COLUMN_WIDTH;
   });
 
-  // Optimization: Only process visible non-HWP nodes
-  const remainingNodes = allNodes.filter(
-    (node) => !hwPathSet.has(node.id) && visibleNodeSet.has(node.id)
-  );
-
+  // Process remaining visible non-HWP nodes
+  const remainingNodes = visibleNodes.filter((node) => !hwPathSet.has(node.id));
   console.log(`⚙️ Processing ${remainingNodes.length} remaining visible nodes`);
 
-  // Simplified generation system for faster performance
-  if (fastLayoutMode) {
-    // For large graphs, use simplified layout to improve performance
-    const generations = new Map<string, number>();
+  // *** Using the exact same layout algorithm as in BraidPoolDAG.tsx ***
+  const generations = new Map<string, number>();
 
-    // Calculate generations in a single pass to avoid repeated calls
-    remainingNodes.forEach((node) => {
-      // If already calculated, skip
-      if (generations.has(node.id)) return;
-
-      const hwpParents = node.parents.filter((p) => hwPathSet.has(p));
-      if (hwpParents.length > 0) {
-        // If has HWP parent, directly compute generation from that
-        generations.set(node.id, 1);
-      } else {
-        // Otherwise just put it one generation after its parents
-        generations.set(node.id, 0);
-      }
-    });
-
-    // Sort by generation for layout
-    remainingNodes.sort(
-      (a, b) => (generations.get(a.id) || 0) - (generations.get(b.id) || 0)
+  remainingNodes.forEach((node) => {
+    const hwpParents = node.parents.filter(
+      (p) => hwPathSet.has(p) && visibleNodeSet.has(p)
     );
-
-    // Position nodes with simple layout algorithm for speed
-    let rightmostX = Math.max(...hwPathColumns) + COLUMN_WIDTH;
-    let row = 0;
-    const FAST_VERTICAL_SPACING = VERTICAL_SPACING * 0.8; // Tighter spacing for large graphs
-
-    remainingNodes.forEach((node) => {
-      const generation = generations.get(node.id) || 0;
-      const column = generation + hwPath.length;
-      const colX = rightmostX + (column - hwPath.length) * COLUMN_WIDTH;
-
-      // Position in a grid-like structure for speed
-      positions[node.id] = {
-        x: colX,
-        y: centerY + (row % 10) * FAST_VERTICAL_SPACING,
-      };
-
-      row++;
-    });
-  } else {
-    // For smaller graphs, use more detailed layout algorithm
-    const generations = new Map<string, number>();
-
-    remainingNodes.forEach((node) => {
-      const hwpParents = node.parents.filter((p) => hwPathSet.has(p));
-      if (hwpParents.length > 0) {
-        const minHWPIndex = Math.min(
-          ...hwpParents.map((p) => hwPath.indexOf(p))
-        );
-        generations.set(node.id, minHWPIndex + 1);
-      } else {
-        const parentGens = node.parents.map((p) => generations.get(p) || 0);
-        generations.set(
-          node.id,
-          parentGens.length > 0 ? Math.max(...parentGens) + 1 : 0
-        );
-      }
-    });
-
-    remainingNodes.sort(
-      (a, b) => (generations.get(a.id) || 0) - (generations.get(b.id) || 0)
-    );
-
-    const tipNodes: string[] = [];
-
-    remainingNodes.forEach((node) => {
-      if (node.parents.length === 1 && node.children.length === 0) {
-        tipNodes.push(node.id);
-      }
-      const positionedParents = node.parents.filter((p) => positions[p]);
-      if (positionedParents.length === 0) return;
-
-      const maxParentX = Math.max(
-        ...positionedParents.map((p) => positions[p].x)
+    if (hwpParents.length > 0) {
+      const minHWPIndex = Math.min(
+        ...hwpParents.map((p) => visibleHwPath.indexOf(p))
       );
-
-      let targetX = maxParentX + COLUMN_WIDTH;
-
-      const hwpParents = positionedParents.filter((p) => hwPathSet.has(p));
-      if (hwpParents.length > 0) {
-        const rightmostHWPParentX = Math.max(
-          ...hwpParents.map((p) => positions[p].x)
-        );
-        const parentIndex = hwPathColumns.indexOf(rightmostHWPParentX);
-        if (parentIndex >= 0 && parentIndex < hwPathColumns.length - 1) {
-          targetX = hwPathColumns[parentIndex + 1];
-        }
-      }
-
-      let yPos = centerY;
-      const maxParentY = Math.max(
-        ...positionedParents.map((p) => positions[p].y)
+      generations.set(node.id, minHWPIndex + 1);
+    } else {
+      const visibleParents = node.parents.filter((p) => visibleNodeSet.has(p));
+      const parentGens = visibleParents.map((p) => generations.get(p) || 0);
+      generations.set(
+        node.id,
+        parentGens.length > 0 ? Math.max(...parentGens) + 1 : 0
       );
-      yPos = maxParentY + VERTICAL_SPACING;
+    }
+  });
 
-      const colKey = Math.round((targetX - margin.left) / COLUMN_WIDTH);
-      if (columnOccupancy[colKey] === undefined) {
-        columnOccupancy[colKey] = 0;
-      } else {
-        yPos =
-          maxParentY +
-          VERTICAL_SPACING +
-          columnOccupancy[colKey] * VERTICAL_SPACING;
-      }
-      columnOccupancy[colKey] += 1;
+  remainingNodes.sort(
+    (a, b) => (generations.get(a.id) || 0) - (generations.get(b.id) || 0)
+  );
 
-      positions[node.id] = {
-        x: targetX,
-        y: Math.min(yPos, Math.abs(height - yPos)),
-      };
-    });
+  const tipNodes: string[] = [];
 
-    const maxColumnX = Math.max(
-      ...Object.values(positions).map((pos) => pos.x)
+  remainingNodes.forEach((node) => {
+    if (node.parents.length === 1 && node.children.length === 0) {
+      tipNodes.push(node.id);
+    }
+
+    const positionedParents = node.parents.filter(
+      (p) => positions[p] && visibleNodeSet.has(p)
     );
-    tipNodes.forEach((tipId) => {
-      if (positions[tipId]) {
-        positions[tipId].x = maxColumnX;
+    if (positionedParents.length === 0) return;
+
+    const maxParentX = Math.max(
+      ...positionedParents.map((p) => positions[p].x)
+    );
+
+    let targetX = maxParentX + COLUMN_WIDTH;
+
+    const hwpParents = positionedParents.filter((p) => hwPathSet.has(p));
+    if (hwpParents.length > 0) {
+      const rightmostHWPParentX = Math.max(
+        ...hwpParents.map((p) => positions[p].x)
+      );
+      const parentIndex = hwPathColumns.indexOf(rightmostHWPParentX);
+      if (parentIndex >= 0 && parentIndex < hwPathColumns.length - 1) {
+        targetX = hwPathColumns[parentIndex + 1];
       }
-    });
-  }
+    }
+
+    let yPos = centerY;
+    const maxParentY = Math.max(
+      ...positionedParents.map((p) => positions[p].y)
+    );
+    yPos = maxParentY + VERTICAL_SPACING;
+
+    const colKey = Math.round((targetX - margin.left) / COLUMN_WIDTH);
+    if (columnOccupancy[colKey] === undefined) {
+      columnOccupancy[colKey] = 0;
+    } else {
+      yPos =
+        maxParentY +
+        VERTICAL_SPACING +
+        columnOccupancy[colKey] * VERTICAL_SPACING;
+    }
+    columnOccupancy[colKey] += 1;
+
+    positions[node.id] = {
+      x: targetX,
+      y: Math.min(yPos, Math.abs(height - yPos)),
+    };
+  });
+
+  const maxColumnX = Math.max(
+    ...Object.values(positions).map((pos) => pos.x),
+    0
+  );
+  tipNodes.forEach((tipId) => {
+    if (positions[tipId]) {
+      positions[tipId].x = maxColumnX;
+    }
+  });
 
   console.log(
     `🏁 Layout complete with ${Object.keys(positions).length} positioned nodes`
