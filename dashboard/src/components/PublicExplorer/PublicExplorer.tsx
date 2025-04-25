@@ -33,7 +33,7 @@ import {
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import './PublicExplorer.css';
-import BlockDetail, { Block } from './BlockDetail';
+import BlockDetail, { Block } from './components/blocks/BlockDetail';
 
 interface BlockData {
   height: number;
@@ -304,78 +304,99 @@ const PublicExplorer: React.FC = () => {
   };
 
   // Function to handle clicking on a block
-  const handleBlockClick = async (blockIdentifier: string | number) => {
-    console.log(`🔍 Viewing block details for: ${blockIdentifier}`);
+  const handleBlockClick = async (hash: string) => {
+    console.log(`🔍 Viewing block details for: ${hash}`);
+    console.log(`🔍 Block hash type: ${typeof hash}, length: ${hash.length}`);
+    console.log(
+      `🔍 First 10 chars: "${hash.substring(
+        0,
+        10
+      )}", last 10: "${hash.substring(hash.length - 10)}"`
+    );
+
     setBlockDetailLoading(true);
     setBlockDetailError(null);
 
     try {
-      console.log(
-        `🔄 Fetching block details from: http://localhost:3100/blocks/${blockIdentifier}`
-      );
-      const response = await fetch(
-        `http://localhost:3100/blocks/${blockIdentifier}`
-      );
+      // Make sure hash has correct format - ensure it starts with zeros if needed
+      const formattedHash = hash.startsWith('0000') ? hash : `0000${hash}`;
+      console.log(`🔄 Using formatted hash: ${formattedHash}`);
+
+      const apiUrl = `http://localhost:3100/blocks/${formattedHash}`;
+      console.log(`🔄 Fetching block details from: ${apiUrl}`);
+
+      const response = await fetch(apiUrl);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`❌ API response not OK: ${response.status}`, errorText);
-        throw new Error(
-          `Failed to fetch block details (${response.status}): ${errorText}`
-        );
+
+        // Try again with the original hash as a fallback
+        console.log(`🔄 Retrying with original hash: ${hash}`);
+        const fallbackUrl = `http://localhost:3100/blocks/${hash}`;
+        const fallbackResponse = await fetch(fallbackUrl);
+
+        if (!fallbackResponse.ok) {
+          throw new Error(
+            `Failed to fetch block details (${response.status}): ${errorText}`
+          );
+        }
+
+        const blockData = await fallbackResponse.json();
+        console.log('📦 Received block data on retry:', blockData);
+        processBlockData(blockData);
+      } else {
+        const blockData = await response.json();
+        console.log('📦 Received block data:', blockData);
+        processBlockData(blockData);
       }
-
-      const blockData = await response.json();
-      console.log('📦 Received block data:', blockData);
-
-      // Transform the data to match the Block interface expected by BlockDetail
-      const transformedBlock: Block = {
-        hash: blockData.hash,
-        height: blockData.height,
-        timestamp: blockData.timestamp,
-        difficulty: blockData.difficulty,
-        merkleRoot: blockData.hash.substring(8, 40), // Using part of hash as mock merkle root
-        nonce: Math.floor(Math.random() * 1000000),
-        bits: (blockData.difficulty / 1000).toFixed(2),
-        size: blockData.size || Math.floor(Math.random() * 1000) + 500,
-        weight: blockData.weight || Math.floor(Math.random() * 3000) + 1500,
-        version: 1,
-        confirmations: Math.floor(Math.random() * 10) + 1,
-        transactions:
-          blockData.transactionData?.map((tx: any) => ({
-            txid: tx.txid,
-            timestamp: tx.timestamp,
-            size: tx.size,
-            weight: tx.size * 4, // Simple estimation of weight
-            fee: parseFloat(tx.fee) * 100000000, // Convert to satoshis
-            value: tx.value * 100000000, // Convert to satoshis
-            inputs: tx.inputs,
-            outputs: tx.outputs,
-          })) || [],
-        fees: parseFloat(blockData.totalFees || '0') * 100000000, // Convert to satoshis
-        previousBlockHash: blockData.parents ? blockData.parents[0] : '',
-        nextBlockHash:
-          blockData.height < (blocks[0]?.height || 0)
-            ? blocks.find((b) => b.height === blockData.height + 1)?.hash
-            : undefined,
-      };
-
-      console.log('✅ Transformed block data:', transformedBlock);
-      setSelectedBlock(transformedBlock);
-      console.log('✅ Block details loaded successfully');
     } catch (err) {
       console.error('❌ Error fetching block details:', err);
-      alert(
-        `Error fetching block details: ${
-          err instanceof Error ? err.message : 'Unknown error'
-        }`
-      );
       setBlockDetailError(
         err instanceof Error ? err.message : 'Failed to load block details'
       );
     } finally {
       setBlockDetailLoading(false);
     }
+  };
+
+  // Helper function to process block data
+  const processBlockData = (blockData: any) => {
+    // Transform the data to match the Block interface expected by BlockDetail
+    const transformedBlock: Block = {
+      hash: blockData.hash,
+      height: blockData.height,
+      timestamp: blockData.timestamp,
+      difficulty: blockData.difficulty,
+      merkleRoot: blockData.hash.substring(8, 40), // Using part of hash as mock merkle root
+      nonce: Math.floor(Math.random() * 1000000),
+      bits: (blockData.difficulty / 1000).toFixed(2),
+      size: blockData.size || Math.floor(Math.random() * 1000) + 500,
+      weight: blockData.weight || Math.floor(Math.random() * 3000) + 1500,
+      version: 1,
+      confirmations: Math.floor(Math.random() * 10) + 1,
+      transactions:
+        blockData.transactionData?.map((tx: any) => ({
+          txid: tx.txid,
+          timestamp: tx.timestamp,
+          size: tx.size,
+          weight: tx.size * 4, // Simple estimation of weight
+          fee: parseFloat(tx.fee) * 100000000, // Convert to satoshis
+          value: tx.value * 100000000, // Convert to satoshis
+          inputs: tx.inputs,
+          outputs: tx.outputs,
+        })) || [],
+      fees: parseFloat(blockData.totalFees || '0') * 100000000, // Convert to satoshis
+      previousBlockHash: blockData.parents ? blockData.parents[0] : '',
+      nextBlockHash:
+        blockData.height < (blocks[0]?.height || 0)
+          ? blocks.find((b) => b.height === blockData.height + 1)?.hash
+          : undefined,
+    };
+
+    console.log('✅ Transformed block data:', transformedBlock);
+    setSelectedBlock(transformedBlock);
+    console.log('✅ Block details loaded successfully');
   };
 
   // Function to clear selected block and return to explorer
@@ -385,8 +406,17 @@ const PublicExplorer: React.FC = () => {
   };
 
   useEffect(() => {
+    let interval: NodeJS.Timeout;
     const fetchData = async () => {
       try {
+        // Skip data fetching if user is viewing block details
+        if (selectedBlock) {
+          console.log(
+            '🔍 User is viewing block details - skipping data refresh'
+          );
+          return;
+        }
+
         // Only show loading on first load
         if (blocks.length === 0) {
           setLoading(true);
@@ -455,10 +485,24 @@ const PublicExplorer: React.FC = () => {
       }
     };
 
+    // Initial data fetch
     fetchData();
-    const interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
-    return () => clearInterval(interval);
-  }, []);
+
+    // Set up the interval, but clear it when viewing block details
+    if (!selectedBlock) {
+      console.log('🔄 Setting up data refresh interval (every 10s)');
+      interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
+    } else {
+      console.log('⏸️ Pausing data refresh while viewing block details');
+    }
+
+    return () => {
+      if (interval) {
+        console.log('🛑 Clearing data refresh interval');
+        clearInterval(interval);
+      }
+    };
+  }, [selectedBlock]); // Add selectedBlock to dependency array to pause/resume interval
 
   // Skeleton loading screen for initial load
   if (loading) {
@@ -757,9 +801,9 @@ const PublicExplorer: React.FC = () => {
                             } ${block.changed?.length ? 'changed' : ''}`}
                             onClick={() => {
                               console.log(
-                                `🖱️ Row clicked for block height: ${block.height}`
+                                `🖱️ Row clicked for block: ${block.hash}`
                               );
-                              handleBlockClick(block.height);
+                              handleBlockClick(block.hash);
                             }}
                             sx={{ cursor: 'pointer' }}
                           >
@@ -769,6 +813,7 @@ const PublicExplorer: React.FC = () => {
                             <TableCell
                               className="table-cell"
                               sx={{ fontFamily: 'monospace' }}
+                              title={block.hash}
                             >
                               {block.hash.slice(0, 8)}...
                             </TableCell>
