@@ -38,7 +38,3 @@ The component uses:
 - Material-UI
 - Recharts
 - TypeScript
-
-## Mock API
-
-The mock API server provides sample data for development and testing. It runs on port 3001 by default.
