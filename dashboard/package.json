@@ -19,6 +19,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.1",
+    "@types/recharts": "^1.8.29",
     "axios": "^1.8.4",
     "d3": "^7.9.0",
     "framer-motion": "^12.6.5",
@@ -26,6 +27,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.4.1",
+    "recharts": "^2.15.3",
     "socket.io-client": "^4.8.1",
     "web-vitals": "^2.1.4"
   },

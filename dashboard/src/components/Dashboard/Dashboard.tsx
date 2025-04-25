@@ -29,6 +29,7 @@ import MempoolLatencyStats from './MempoolLatencyStats';
 import RecentBlocksTable from './RecentBlocksTable';
 import GraphVisualization from '../BraidPoolDAG/BraidPoolDAG';
 import MinedSharesExplorer from '../MinerDashboard/MinerDashboard';
+import PublicExplorer from '../PublicExplorer/PublicExplorer';
 // Utils
 import {
   loadSampleBraidData,
@@ -46,6 +47,7 @@ enum Page {
   MEMPOOL = 'mempool',
   DAG_VISUALIZATION = 'dag-visualization',
   MINER_STATS = 'miner-stats',
+  PUBLIC_EXPLORER = 'public-explorer',
 }
 
 const Dashboard = () => {
@@ -296,6 +298,38 @@ const Dashboard = () => {
             primaryTypographyProps={{ fontSize: '0.875rem' }}
           />
         </ListItemButton>
+
+        <ListItemButton
+          onClick={() => setCurrentPage(Page.PUBLIC_EXPLORER)}
+          selected={currentPage === Page.PUBLIC_EXPLORER}
+          sx={{
+            pl: 2,
+            py: 1.5,
+            borderLeft:
+              currentPage === Page.PUBLIC_EXPLORER
+                ? `4px solid ${colors.primary}`
+                : 'none',
+            '&.Mui-selected': {
+              backgroundColor: 'rgba(57, 134, 232, 0.08)',
+            },
+          }}
+        >
+          <ListItemIcon
+            sx={{
+              minWidth: 40,
+              color:
+                currentPage === Page.PUBLIC_EXPLORER
+                  ? colors.primary
+                  : colors.textSecondary,
+            }}
+          >
+            <LayersIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText
+            primary="Public Explorer"
+            primaryTypographyProps={{ fontSize: '0.875rem' }}
+          />
+        </ListItemButton>
       </List>
     </Drawer>
   );
@@ -358,6 +392,8 @@ const Dashboard = () => {
         );
       case Page.MINER_STATS:
         return <MinedSharesExplorer />;
+      case Page.PUBLIC_EXPLORER:
+        return <PublicExplorer />;
     }
   };
 
