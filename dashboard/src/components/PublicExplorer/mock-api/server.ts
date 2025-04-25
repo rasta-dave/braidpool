@@ -114,8 +114,21 @@ function updateNetworkStats(braidData: any) {
 // Connect to simulator on startup
 connectToSimulator();
 
-app.use(cors());
+// Setup CORS properly
+app.use(
+  cors({
+    origin: '*', // Allow all origins in development
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
 app.use(express.json());
+
+// Add a diagnostic middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`🔍 ${req.method} ${req.path} request received`);
+  next();
+});
 
 // API endpoints
 app.get('/blocks', (req, res) => {
@@ -137,6 +150,100 @@ app.get('/stats', (req, res) => {
   console.log('📡 GET /stats request received');
   res.json(networkStats);
 });
+
+// Block details endpoint - get a specific block by hash or height
+app.get('/blocks/:identifier', (req, res) => {
+  console.log(`📡 GET /blocks/${req.params.identifier} request received`);
+  const identifier = req.params.identifier;
+
+  // Check if we have any blocks data
+  if (latestBlocks.length === 0) {
+    console.log('⚠️ No blocks data available yet, generating mock data');
+    const mockBlocks = generateMockBlocks(20);
+
+    // Try to find the block by hash or height
+    const block = findBlockByIdentifier(mockBlocks, identifier);
+
+    if (!block) {
+      console.log(`❌ Block not found with identifier: ${identifier}`);
+      return res.status(404).json({ error: 'Block not found' });
+    }
+
+    // Add mock transaction data to the block
+    const blockWithTxs = addMockTransactionsToBlock(block);
+    console.log(`📦 Sending mock block details for: ${block.hash}`);
+    return res.json(blockWithTxs);
+  }
+
+  // Try to find the block in our latest blocks
+  const block = findBlockByIdentifier(latestBlocks, identifier);
+
+  if (!block) {
+    console.log(`❌ Block not found with identifier: ${identifier}`);
+    return res.status(404).json({ error: 'Block not found' });
+  }
+
+  // Add mock transaction data to the block
+  const blockWithTxs = addMockTransactionsToBlock(block);
+  console.log(`📦 Sending details for block: ${block.hash}`);
+  return res.json(blockWithTxs);
+});
+
+// Generate mock transaction data for a specific block
+function addMockTransactionsToBlock(block: any) {
+  const txCount = block.transactions || Math.floor(Math.random() * 30) + 1;
+  const transactions = [];
+
+  for (let i = 0; i < txCount; i++) {
+    transactions.push({
+      txid: `${block.hash.substring(0, 8)}${Math.random()
+        .toString(16)
+        .slice(2, 10)}`,
+      value: Math.random() * 2.5,
+      size: Math.floor(Math.random() * 500) + 200,
+      fee: (Math.random() * 0.0005 + 0.0001).toFixed(8),
+      timestamp: block.timestamp - Math.floor(Math.random() * 300000),
+      inputs: Math.floor(Math.random() * 3) + 1,
+      outputs: Math.floor(Math.random() * 3) + 1,
+    });
+  }
+
+  return {
+    ...block,
+    transactionData: transactions,
+    totalFees: transactions
+      .reduce((sum: number, tx: any) => sum + parseFloat(tx.fee), 0)
+      .toFixed(8),
+    totalValue: transactions
+      .reduce((sum: number, tx: any) => sum + tx.value, 0)
+      .toFixed(8),
+  };
+}
+
+// Find a block by hash or height
+function findBlockByIdentifier(blocks: any[], identifier: string) {
+  console.log(`🔍 Looking for block with identifier: ${identifier}`);
+
+  // Try to parse as height (number)
+  const height = parseInt(identifier);
+  if (!isNaN(height)) {
+    console.log(`🔢 Searching by height: ${height}`);
+    return blocks.find((block) => block.height === height);
+  }
+
+  // Try exact hash match
+  const exactMatch = blocks.find((block) => block.hash === identifier);
+  if (exactMatch) {
+    console.log(`✅ Found block by exact hash match`);
+    return exactMatch;
+  }
+
+  // If exact match fails, use the first block as a fallback (for debugging)
+  console.log(
+    `⚠️ No exact match found, using first block as fallback for demo purposes`
+  );
+  return blocks.length > 0 ? blocks[0] : null;
+}
 
 // Fallback mock data generator
 const generateMockBlocks = (count: number) => {

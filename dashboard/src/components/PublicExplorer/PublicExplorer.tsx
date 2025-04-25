@@ -17,6 +17,8 @@ import {
   InputAdornment,
   IconButton,
   Fade,
+  Breadcrumbs,
+  Link as MuiLink,
 } from '@mui/material';
 import {
   LineChart,
@@ -29,7 +31,9 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import SearchIcon from '@mui/icons-material/Search';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import './PublicExplorer.css';
+import BlockDetail, { Block } from './BlockDetail';
 
 interface BlockData {
   height: number;
@@ -175,6 +179,9 @@ const PublicExplorer: React.FC = () => {
   const prevTransactionsRef = useRef<TransactionData[]>([]);
   const [isFetchingData, setIsFetchingData] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [selectedBlock, setSelectedBlock] = useState<Block | null>(null);
+  const [blockDetailLoading, setBlockDetailLoading] = useState(false);
+  const [blockDetailError, setBlockDetailError] = useState<string | null>(null);
 
   const memoizedBlocks = useMemo(() => blocks, [blocks]);
 
@@ -294,6 +301,87 @@ const PublicExplorer: React.FC = () => {
 
     setBlocks(diffedBlocks);
     prevBlocksRef.current = sortedBlocks;
+  };
+
+  // Function to handle clicking on a block
+  const handleBlockClick = async (blockIdentifier: string | number) => {
+    console.log(`🔍 Viewing block details for: ${blockIdentifier}`);
+    setBlockDetailLoading(true);
+    setBlockDetailError(null);
+
+    try {
+      console.log(
+        `🔄 Fetching block details from: http://localhost:3100/blocks/${blockIdentifier}`
+      );
+      const response = await fetch(
+        `http://localhost:3100/blocks/${blockIdentifier}`
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ API response not OK: ${response.status}`, errorText);
+        throw new Error(
+          `Failed to fetch block details (${response.status}): ${errorText}`
+        );
+      }
+
+      const blockData = await response.json();
+      console.log('📦 Received block data:', blockData);
+
+      // Transform the data to match the Block interface expected by BlockDetail
+      const transformedBlock: Block = {
+        hash: blockData.hash,
+        height: blockData.height,
+        timestamp: blockData.timestamp,
+        difficulty: blockData.difficulty,
+        merkleRoot: blockData.hash.substring(8, 40), // Using part of hash as mock merkle root
+        nonce: Math.floor(Math.random() * 1000000),
+        bits: (blockData.difficulty / 1000).toFixed(2),
+        size: blockData.size || Math.floor(Math.random() * 1000) + 500,
+        weight: blockData.weight || Math.floor(Math.random() * 3000) + 1500,
+        version: 1,
+        confirmations: Math.floor(Math.random() * 10) + 1,
+        transactions:
+          blockData.transactionData?.map((tx: any) => ({
+            txid: tx.txid,
+            timestamp: tx.timestamp,
+            size: tx.size,
+            weight: tx.size * 4, // Simple estimation of weight
+            fee: parseFloat(tx.fee) * 100000000, // Convert to satoshis
+            value: tx.value * 100000000, // Convert to satoshis
+            inputs: tx.inputs,
+            outputs: tx.outputs,
+          })) || [],
+        fees: parseFloat(blockData.totalFees || '0') * 100000000, // Convert to satoshis
+        previousBlockHash: blockData.parents ? blockData.parents[0] : '',
+        nextBlockHash:
+          blockData.height < (blocks[0]?.height || 0)
+            ? blocks.find((b) => b.height === blockData.height + 1)?.hash
+            : undefined,
+      };
+
+      console.log('✅ Transformed block data:', transformedBlock);
+      setSelectedBlock(transformedBlock);
+      console.log('✅ Block details loaded successfully');
+    } catch (err) {
+      console.error('❌ Error fetching block details:', err);
+      alert(
+        `Error fetching block details: ${
+          err instanceof Error ? err.message : 'Unknown error'
+        }`
+      );
+      setBlockDetailError(
+        err instanceof Error ? err.message : 'Failed to load block details'
+      );
+    } finally {
+      setBlockDetailLoading(false);
+    }
+  };
+
+  // Function to clear selected block and return to explorer
+  const handleBackToExplorer = () => {
+    setSelectedBlock(null);
+    setBlockDetailError(null);
   };
 
   useEffect(() => {
@@ -455,313 +543,353 @@ const PublicExplorer: React.FC = () => {
       sx={{ p: 3 }}
       className={`explorer-container ${isFetchingData ? 'updating' : ''}`}
     >
-      <Typography variant="h4" gutterBottom>
-        Braidpool Explorer
-      </Typography>
-
-      {/* Search Bar */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <TextField
-              fullWidth
-              variant="outlined"
-              placeholder="Search for block height, hash, transaction, or address"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{ mr: 2 }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={handleSearch}>
-                      <SearchIcon />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-              onKeyPress={(e) => {
-                if (e.key === 'Enter') {
-                  handleSearch();
-                }
-              }}
-            />
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* Network Stats */}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
-        <StatDisplay
-          label="Total Blocks"
-          value={networkStats.totalBlocks}
-          isLoading={initialLoad}
-          changedField={networkStats.changed?.includes('totalBlocks')}
-        />
-        <StatDisplay
-          label="Network Hashrate"
-          value={`${networkStats.networkHashrate} TH/s`}
-          isLoading={initialLoad}
-          changedField={networkStats.changed?.includes('networkHashrate')}
-        />
-        <StatDisplay
-          label="Active Miners"
-          value={networkStats.activeMiners}
-          isLoading={initialLoad}
-          changedField={networkStats.changed?.includes('activeMiners')}
-        />
-        <StatDisplay
-          label="Avg Block Time"
-          value={`${networkStats.averageBlockTime} sec`}
-          isLoading={initialLoad}
-          changedField={networkStats.changed?.includes('averageBlockTime')}
-        />
+      {/* Breadcrumbs navigation */}
+      <Box sx={{ mb: 2 }}>
+        {selectedBlock ? (
+          <Breadcrumbs separator="›" aria-label="breadcrumb">
+            <MuiLink
+              component="button"
+              variant="body1"
+              onClick={handleBackToExplorer}
+              sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+              underline="hover"
+            >
+              <ArrowBackIcon sx={{ mr: 0.5, fontSize: '0.8rem' }} />
+              Explorer
+            </MuiLink>
+            <Typography color="text.primary">
+              Block #{selectedBlock.height}
+            </Typography>
+          </Breadcrumbs>
+        ) : (
+          <Typography variant="h4" gutterBottom>
+            Braidpool Explorer
+          </Typography>
+        )}
       </Box>
 
-      {/* Block Timeline Chart */}
-      <Card sx={{ mb: 3 }} className="explorer-card">
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Block Timeline
-          </Typography>
-          <Box sx={{ height: 300 }} className="chart-container">
-            {initialLoad ? (
-              <div className="skeleton" style={{ height: '100%' }} />
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                  data={memoizedBlocks}
-                  key="block-timeline-chart"
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="height"
-                    allowDataOverflow={false}
-                    tickFormatter={(value) => value.toString()}
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    domain={['auto', 'auto']}
-                    allowDataOverflow={false}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={['auto', 'auto']}
-                    allowDataOverflow={false}
-                  />
-                  <Tooltip
-                    animationDuration={300}
-                    animationEasing="ease-out"
-                    formatter={(value, name) => {
-                      return [value, name];
-                    }}
-                  />
-                  <Legend />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="work"
-                    stroke="#8884d8"
-                    name="Work"
-                    isAnimationActive={!isFetchingData}
-                    animationDuration={800}
-                    animationEasing="ease-in-out"
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5, strokeWidth: 1 }}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="difficulty"
-                    stroke="#82ca9d"
-                    name="Difficulty"
-                    isAnimationActive={!isFetchingData}
-                    animationDuration={800}
-                    animationEasing="ease-in-out"
-                    dot={{ r: 3 }}
-                    activeDot={{ r: 5, strokeWidth: 1 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </Box>
-        </CardContent>
-      </Card>
+      {selectedBlock ? (
+        <BlockDetail
+          block={selectedBlock}
+          isLoading={blockDetailLoading}
+          error={blockDetailError || undefined}
+        />
+      ) : (
+        <>
+          {/* Search Bar */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <TextField
+                  fullWidth
+                  variant="outlined"
+                  placeholder="Search for block height, hash, transaction, or address"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  sx={{ mr: 2 }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton onClick={handleSearch}>
+                          <SearchIcon />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSearch();
+                    }
+                  }}
+                />
+              </Box>
+            </CardContent>
+          </Card>
 
-      {/* Latest Blocks Table */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 2,
-            }}
-          >
-            <Typography variant="h6">Latest Blocks</Typography>
-            <Button variant="text" color="primary">
-              View more blocks
-            </Button>
+          {/* Network Stats */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+            <StatDisplay
+              label="Total Blocks"
+              value={networkStats.totalBlocks}
+              isLoading={initialLoad}
+              changedField={networkStats.changed?.includes('totalBlocks')}
+            />
+            <StatDisplay
+              label="Network Hashrate"
+              value={`${networkStats.networkHashrate} TH/s`}
+              isLoading={initialLoad}
+              changedField={networkStats.changed?.includes('networkHashrate')}
+            />
+            <StatDisplay
+              label="Active Miners"
+              value={networkStats.activeMiners}
+              isLoading={initialLoad}
+              changedField={networkStats.changed?.includes('activeMiners')}
+            />
+            <StatDisplay
+              label="Avg Block Time"
+              value={`${networkStats.averageBlockTime} sec`}
+              isLoading={initialLoad}
+              changedField={networkStats.changed?.includes('averageBlockTime')}
+            />
           </Box>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Height</TableCell>
-                  <TableCell>Hash</TableCell>
-                  <TableCell>Timestamp</TableCell>
-                  <TableCell>Miner</TableCell>
-                  <TableCell>Transactions</TableCell>
-                  <TableCell>Size (KB)</TableCell>
-                  <TableCell>Weight (KWU)</TableCell>
-                  <TableCell>Work</TableCell>
-                  <TableCell>Difficulty</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {initialLoad
-                  ? Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>
-                        {Array.from({ length: 9 }).map((_, j) => (
-                          <TableCell key={j}>
-                            <div className="skeleton skeleton-text" />
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  : blocks.slice(0, 5).map((block) => (
-                      <TableRow
-                        key={block.hash}
-                        hover
-                        className={`table-row ${
-                          block.isNew ? 'new-data' : ''
-                        } ${block.changed?.length ? 'changed' : ''}`}
-                      >
-                        <TableCell className="table-cell">
-                          {block.height}
-                        </TableCell>
-                        <TableCell
-                          className="table-cell"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          {block.hash.slice(0, 8)}...
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {formatDate(block.timestamp)}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {block.miner}
-                        </TableCell>
-                        <TableCell
-                          className={`table-cell ${
-                            block.changed?.includes('transactions')
-                              ? 'changed'
-                              : ''
-                          }`}
-                        >
-                          {block.transactions}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {(block.size! / 1024).toFixed(3)}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {(block.weight! / 1024).toFixed(3)}
-                        </TableCell>
-                        <TableCell
-                          className={`table-cell ${
-                            block.changed?.includes('work') ? 'changed' : ''
-                          }`}
-                        >
-                          {block.work.toFixed(2)}
-                        </TableCell>
-                        <TableCell
-                          className={`table-cell ${
-                            block.changed?.includes('difficulty')
-                              ? 'changed'
-                              : ''
-                          }`}
-                        >
-                          {block.difficulty}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
 
-      {/* Latest Transactions */}
-      <Card>
-        <CardContent>
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 2,
-            }}
-          >
-            <Typography variant="h6">Latest Transactions</Typography>
-            <Button variant="text" color="primary">
-              View more transactions
-            </Button>
-          </Box>
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Transaction ID</TableCell>
-                  <TableCell>Timestamp</TableCell>
-                  <TableCell>Value</TableCell>
-                  <TableCell>Size</TableCell>
-                  <TableCell>Fee (sat/vB)</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {initialLoad
-                  ? Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>
-                        {Array.from({ length: 5 }).map((_, j) => (
-                          <TableCell key={j}>
-                            <div className="skeleton skeleton-text" />
-                          </TableCell>
+          {/* Block Timeline Chart */}
+          <Card sx={{ mb: 3 }} className="explorer-card">
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Block Timeline
+              </Typography>
+              <Box sx={{ height: 300 }} className="chart-container">
+                {initialLoad ? (
+                  <div className="skeleton" style={{ height: '100%' }} />
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={memoizedBlocks}
+                      key="block-timeline-chart"
+                      margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="height"
+                        allowDataOverflow={false}
+                        tickFormatter={(value) => value.toString()}
+                      />
+                      <YAxis
+                        yAxisId="left"
+                        domain={['auto', 'auto']}
+                        allowDataOverflow={false}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={['auto', 'auto']}
+                        allowDataOverflow={false}
+                      />
+                      <Tooltip
+                        animationDuration={300}
+                        animationEasing="ease-out"
+                        formatter={(value, name) => {
+                          return [value, name];
+                        }}
+                      />
+                      <Legend />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="work"
+                        stroke="#8884d8"
+                        name="Work"
+                        isAnimationActive={!isFetchingData}
+                        animationDuration={800}
+                        animationEasing="ease-in-out"
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5, strokeWidth: 1 }}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="difficulty"
+                        stroke="#82ca9d"
+                        name="Difficulty"
+                        isAnimationActive={!isFetchingData}
+                        animationDuration={800}
+                        animationEasing="ease-in-out"
+                        dot={{ r: 3 }}
+                        activeDot={{ r: 5, strokeWidth: 1 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+
+          {/* Latest Blocks Table */}
+          <Card sx={{ mb: 3 }}>
+            <CardContent>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6">Latest Blocks</Typography>
+                <Button variant="text" color="primary">
+                  View more blocks
+                </Button>
+              </Box>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Height</TableCell>
+                      <TableCell>Hash</TableCell>
+                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Miner</TableCell>
+                      <TableCell>Transactions</TableCell>
+                      <TableCell>Size (KB)</TableCell>
+                      <TableCell>Weight (KWU)</TableCell>
+                      <TableCell>Work</TableCell>
+                      <TableCell>Difficulty</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {initialLoad
+                      ? Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            {Array.from({ length: 9 }).map((_, j) => (
+                              <TableCell key={j}>
+                                <div className="skeleton skeleton-text" />
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      : blocks.slice(0, 5).map((block) => (
+                          <TableRow
+                            key={block.hash}
+                            hover
+                            className={`table-row clickable ${
+                              block.isNew ? 'new-data' : ''
+                            } ${block.changed?.length ? 'changed' : ''}`}
+                            onClick={() => {
+                              console.log(
+                                `🖱️ Row clicked for block height: ${block.height}`
+                              );
+                              handleBlockClick(block.height);
+                            }}
+                            sx={{ cursor: 'pointer' }}
+                          >
+                            <TableCell className="table-cell">
+                              {block.height}
+                            </TableCell>
+                            <TableCell
+                              className="table-cell"
+                              sx={{ fontFamily: 'monospace' }}
+                            >
+                              {block.hash.slice(0, 8)}...
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {formatDate(block.timestamp)}
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {block.miner}
+                            </TableCell>
+                            <TableCell
+                              className={`table-cell ${
+                                block.changed?.includes('transactions')
+                                  ? 'changed'
+                                  : ''
+                              }`}
+                            >
+                              {block.transactions}
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {(block.size! / 1024).toFixed(3)}
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {(block.weight! / 1024).toFixed(3)}
+                            </TableCell>
+                            <TableCell
+                              className={`table-cell ${
+                                block.changed?.includes('work') ? 'changed' : ''
+                              }`}
+                            >
+                              {block.work.toFixed(2)}
+                            </TableCell>
+                            <TableCell
+                              className={`table-cell ${
+                                block.changed?.includes('difficulty')
+                                  ? 'changed'
+                                  : ''
+                              }`}
+                            >
+                              {block.difficulty}
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </TableRow>
-                    ))
-                  : transactions.slice(0, 5).map((tx) => (
-                      <TableRow
-                        key={tx.txid}
-                        hover
-                        className={`table-row ${tx.isNew ? 'new-data' : ''}`}
-                      >
-                        <TableCell
-                          className="table-cell"
-                          sx={{ fontFamily: 'monospace' }}
-                        >
-                          {tx.txid.slice(0, 8)}...
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {formatDate(tx.timestamp)}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {formatBTC(tx.value)}
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {tx.size} vB
-                        </TableCell>
-                        <TableCell className="table-cell">
-                          {tx.fee.toFixed(1)} sat/vB
-                        </TableCell>
-                      </TableRow>
-                    ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+
+          {/* Latest Transactions */}
+          <Card>
+            <CardContent>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  mb: 2,
+                }}
+              >
+                <Typography variant="h6">Latest Transactions</Typography>
+                <Button variant="text" color="primary">
+                  View more transactions
+                </Button>
+              </Box>
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Transaction ID</TableCell>
+                      <TableCell>Timestamp</TableCell>
+                      <TableCell>Value</TableCell>
+                      <TableCell>Size</TableCell>
+                      <TableCell>Fee (sat/vB)</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {initialLoad
+                      ? Array.from({ length: 5 }).map((_, i) => (
+                          <TableRow key={i}>
+                            {Array.from({ length: 5 }).map((_, j) => (
+                              <TableCell key={j}>
+                                <div className="skeleton skeleton-text" />
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                      : transactions.slice(0, 5).map((tx) => (
+                          <TableRow
+                            key={tx.txid}
+                            hover
+                            className={`table-row ${
+                              tx.isNew ? 'new-data' : ''
+                            }`}
+                          >
+                            <TableCell
+                              className="table-cell"
+                              sx={{ fontFamily: 'monospace' }}
+                            >
+                              {tx.txid.slice(0, 8)}...
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {formatDate(tx.timestamp)}
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {formatBTC(tx.value)}
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {tx.size} vB
+                            </TableCell>
+                            <TableCell className="table-cell">
+                              {tx.fee.toFixed(1)} sat/vB
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </CardContent>
+          </Card>
+        </>
+      )}
     </Box>
   );
 };
