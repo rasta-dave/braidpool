@@ -141,18 +141,8 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     const container = containerRef.current;
     const { speed } = momentum;
 
-    if (Math.abs(speed) < 0.5) {
+    if (Math.abs(speed) < 0.2) {
       scrollAnimationRef.current = null;
-
-      // Optional: Implement snap-to-block behavior
-      const blockWidth = 155; // Block size + margins
-      const targetPosition =
-        Math.round(container.scrollLeft / blockWidth) * blockWidth;
-      container.scrollTo({
-        left: targetPosition,
-        behavior: 'smooth',
-      });
-
       return;
     }
 
@@ -160,7 +150,7 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     container.scrollLeft += speed;
     setMomentum((prev) => ({
       ...prev,
-      speed: prev.speed * 0.95, // Decay factor
+      speed: prev.speed * 0.97, // Slower decay for smoother scrolling
     }));
 
     console.log(`📊 Momentum scrolling - speed: ${speed.toFixed(2)}`);
@@ -189,12 +179,12 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
       if (!isDragging || !containerRef.current) return;
 
       const x = e.pageX - containerRef.current.offsetLeft;
-      const walkX = (x - startX) * 1.5; // Multiply by 1.5 for faster dragging
+      const walkX = (x - startX) * 2; // Increased multiplier for more responsive dragging
       containerRef.current.scrollLeft = scrollLeft - walkX;
 
       // Calculate and store current momentum
       setMomentum({
-        speed: walkX * 0.1, // Scale the momentum
+        speed: walkX * 0.15, // Increased momentum impact
         timestamp: Date.now(),
       });
 
@@ -239,12 +229,12 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
         return;
 
       const x = e.touches[0].pageX - containerRef.current.offsetLeft;
-      const walkX = (x - startX) * 1.5;
+      const walkX = (x - startX) * 2; // Increased multiplier for more responsive touch
       containerRef.current.scrollLeft = scrollLeft - walkX;
 
       // Calculate and store current momentum
       setMomentum({
-        speed: walkX * 0.1,
+        speed: walkX * 0.15, // Increased momentum impact
         timestamp: Date.now(),
       });
 
