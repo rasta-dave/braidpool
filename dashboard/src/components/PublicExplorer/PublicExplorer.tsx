@@ -36,6 +36,7 @@ import './PublicExplorer.css';
 import BlockDetail, { Block } from './components/blocks/BlockDetail';
 import TransactionRoutes from './components/transactions/TransactionRoutes';
 import TransactionDetails from './components/transactions/TransactionDetails';
+import { BlockchainBlocks } from './components/blockchain';
 import { Routes, Route, useLocation } from 'react-router-dom';
 
 interface BlockData {
@@ -703,6 +704,42 @@ const PublicExplorer: React.FC = () => {
                 />
               </Box>
 
+              {/* Blockchain Visualization */}
+              <Card sx={{ mb: 3 }} className="explorer-card">
+                <CardContent>
+                  <Typography variant="h6" gutterBottom>
+                    Latest Blocks
+                  </Typography>
+                  <BlockchainBlocks
+                    blocks={memoizedBlocks.map((block) => ({
+                      block_height: block.height,
+                      block_hash: block.hash,
+                      size: block.size || 1000,
+                      weight: block.weight || 4000,
+                      tx_count: block.transactions,
+                      total_fee: block.difficulty / 10,
+                      timestamp: Math.floor(block.timestamp / 1000),
+                      difficulty: block.difficulty,
+                      median_time: Math.floor(block.timestamp / 1000),
+                      merkle_root: '',
+                      version: 1,
+                      bits: 0,
+                      nonce: 0,
+                      isNew: block.isNew,
+                      hasChanged:
+                        Array.isArray(block.changed) &&
+                        block.changed.length > 0,
+                      changedProperties: block.changed || [],
+                    }))}
+                    loading={initialLoad}
+                    maxBlocksToShow={12}
+                    onBlockSelected={(block) =>
+                      handleBlockClick(block.block_hash)
+                    }
+                  />
+                </CardContent>
+              </Card>
+
               {/* Block Timeline Chart */}
               <Card sx={{ mb: 3 }} className="explorer-card">
                 <CardContent>
@@ -831,133 +868,22 @@ const PublicExplorer: React.FC = () => {
                                 } ${block.changed?.length ? 'changed' : ''}`}
                                 onClick={() => {
                                   console.log(
-                                    `🖱️ Row clicked for block: ${block.hash}`
+                                    `🔍 Viewing block details for: ${block.hash}`
                                   );
                                   handleBlockClick(block.hash);
                                 }}
-                                sx={{ cursor: 'pointer' }}
                               >
-                                <TableCell className="table-cell">
-                                  {block.height}
-                                </TableCell>
-                                <TableCell
-                                  className="table-cell"
-                                  sx={{ fontFamily: 'monospace' }}
-                                  title={block.hash}
-                                >
-                                  {block.hash.slice(0, 8)}...
-                                </TableCell>
-                                <TableCell className="table-cell">
+                                <TableCell>{block.height}</TableCell>
+                                <TableCell>{block.hash}</TableCell>
+                                <TableCell>
                                   {formatDate(block.timestamp)}
                                 </TableCell>
-                                <TableCell className="table-cell">
-                                  {block.miner}
-                                </TableCell>
-                                <TableCell
-                                  className={`table-cell ${
-                                    block.changed?.includes('transactions')
-                                      ? 'changed'
-                                      : ''
-                                  }`}
-                                >
-                                  {block.transactions}
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {(block.size! / 1024).toFixed(3)}
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {(block.weight! / 1024).toFixed(3)}
-                                </TableCell>
-                                <TableCell
-                                  className={`table-cell ${
-                                    block.changed?.includes('work')
-                                      ? 'changed'
-                                      : ''
-                                  }`}
-                                >
-                                  {block.work.toFixed(2)}
-                                </TableCell>
-                                <TableCell
-                                  className={`table-cell ${
-                                    block.changed?.includes('difficulty')
-                                      ? 'changed'
-                                      : ''
-                                  }`}
-                                >
-                                  {block.difficulty}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </CardContent>
-              </Card>
-
-              {/* Latest Transactions */}
-              <Card>
-                <CardContent>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      mb: 2,
-                    }}
-                  >
-                    <Typography variant="h6">Latest Transactions</Typography>
-                    <Button variant="text" color="primary">
-                      View more transactions
-                    </Button>
-                  </Box>
-                  <TableContainer component={Paper}>
-                    <Table>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Transaction ID</TableCell>
-                          <TableCell>Timestamp</TableCell>
-                          <TableCell>Value</TableCell>
-                          <TableCell>Size</TableCell>
-                          <TableCell>Fee (sat/vB)</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {initialLoad
-                          ? Array.from({ length: 5 }).map((_, i) => (
-                              <TableRow key={i}>
-                                {Array.from({ length: 5 }).map((_, j) => (
-                                  <TableCell key={j}>
-                                    <div className="skeleton skeleton-text" />
-                                  </TableCell>
-                                ))}
-                              </TableRow>
-                            ))
-                          : transactions.slice(0, 5).map((tx) => (
-                              <TableRow
-                                key={tx.txid}
-                                hover
-                                className={`table-row ${
-                                  tx.isNew ? 'new-data' : ''
-                                }`}
-                              >
-                                <TableCell
-                                  className="table-cell"
-                                  sx={{ fontFamily: 'monospace' }}
-                                >
-                                  {tx.txid.slice(0, 8)}...
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {formatDate(tx.timestamp)}
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {formatBTC(tx.value)}
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {tx.size} vB
-                                </TableCell>
-                                <TableCell className="table-cell">
-                                  {tx.fee.toFixed(1)} sat/vB
-                                </TableCell>
+                                <TableCell>{block.miner}</TableCell>
+                                <TableCell>{block.transactions}</TableCell>
+                                <TableCell>{block.size}</TableCell>
+                                <TableCell>{block.weight}</TableCell>
+                                <TableCell>{block.work}</TableCell>
+                                <TableCell>{block.difficulty}</TableCell>
                               </TableRow>
                             ))}
                       </TableBody>

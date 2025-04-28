@@ -9,31 +9,45 @@ export class TransactionService {
   }
 
   async getTransaction(txid: string): Promise<BraidTransaction> {
-    // Check cache first
-    if (this.transactionCache.has(txid)) {
-      console.log('Using cached transaction:', txid);
-      return this.transactionCache.get(txid)!;
+    // Check if the transaction ID is valid
+    if (!txid || txid.trim() === '') {
+      console.error('🚨 Invalid transaction ID:', txid);
+      throw new Error('Invalid transaction ID');
     }
 
-    console.log('Fetching transaction:', txid);
+    // Format transaction ID consistently (some might have leading zeros)
+    const formattedTxid = txid.trim();
+
+    console.log('🔍 Looking for transaction:', formattedTxid);
+
+    // Check cache first
+    if (this.transactionCache.has(formattedTxid)) {
+      console.log('💾 Using cached transaction:', formattedTxid);
+      return this.transactionCache.get(formattedTxid)!;
+    }
+
+    console.log('🔄 Fetching transaction from API:', formattedTxid);
+    console.log('🌐 API URL:', `${this.apiUrl}/tx/${formattedTxid}`);
 
     try {
-      const response = await fetch(`${this.apiUrl}/tx/${txid}`);
+      const response = await fetch(`${this.apiUrl}/tx/${formattedTxid}`);
 
       if (!response.ok) {
+        console.error('❌ HTTP error:', response.status);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data: BraidTransaction = await response.json();
-      this.processTxData(data);
-      this.transactionCache.set(txid, data);
+      console.log('✅ Transaction data received:', data.txid);
 
-      console.log('Transaction data received:', data);
+      this.processTxData(data);
+      this.transactionCache.set(formattedTxid, data);
+
       return data;
     } catch (error) {
-      console.error('Error fetching transaction:', error);
+      console.error('❌ Error fetching transaction:', error);
       throw new Error(
-        `Could not fetch transaction ${txid}: ${
+        `Could not fetch transaction ${formattedTxid}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

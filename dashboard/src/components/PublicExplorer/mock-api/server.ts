@@ -245,12 +245,116 @@ app.get('/tx/:txid', (req, res) => {
   const txid = req.params.txid;
   console.log(`📡 GET transaction details for: ${txid}`);
 
-  // Create a mock transaction
-  const mockTransaction = createMockTransaction(txid);
+  // Normalize the transaction ID by removing leading zeros if needed
+  const normalizedTxid = txid.toLowerCase().replace(/^0+/, '');
 
-  console.log(`✅ Sending mock transaction data for: ${txid}`);
-  res.json(mockTransaction);
+  console.log(`🔍 Normalized transaction ID: ${normalizedTxid}`);
+
+  // Try to find the transaction in existing blocks
+  let foundTx = null;
+
+  // Look through all latestBlocks to find transactions with matching IDs
+  for (const block of latestBlocks) {
+    if (block.transactionData) {
+      for (const tx of block.transactionData) {
+        const normalizedBlockTxid = tx.txid.toLowerCase().replace(/^0+/, '');
+        if (
+          normalizedBlockTxid === normalizedTxid ||
+          tx.txid === txid ||
+          tx.txid.includes(normalizedTxid) ||
+          normalizedTxid.includes(tx.txid.toLowerCase().replace(/^0+/, ''))
+        ) {
+          console.log(`✅ Found matching transaction in block ${block.hash}`);
+          foundTx = tx;
+          break;
+        }
+      }
+    }
+
+    if (foundTx) break;
+  }
+
+  // If not found, create a mock transaction
+  if (!foundTx) {
+    console.log(
+      `🧩 Transaction not found in blocks, generating mock data for txid: ${txid}`
+    );
+    const mockTransaction = createMockTransaction(txid);
+    console.log(`✅ Sending mock transaction data for: ${txid}`);
+    return res.json(mockTransaction);
+  }
+
+  // Convert block transaction to full transaction format
+  const fullTransaction = {
+    txid: foundTx.txid,
+    hash: foundTx.txid,
+    version: 1,
+    size: foundTx.size,
+    weight: foundTx.size * 4,
+    locktime: 0,
+    height: 1000 + Math.floor(Math.random() * 50),
+    timestamp: foundTx.timestamp,
+    work: Math.floor(Math.random() * 100) + 1000,
+    parents: [
+      `0000${Math.random().toString(16).slice(2, 14)}`,
+      `0000${Math.random().toString(16).slice(2, 14)}`,
+    ],
+    miner: `Miner${Math.floor(Math.random() * 5) + 1}`,
+    fee: parseFloat(foundTx.fee),
+    feePerVsize: (parseFloat(foundTx.fee) / (foundTx.size / 4)) * 100000000,
+    status: {
+      confirmed: true,
+      block_height: 1000 + Math.floor(Math.random() * 50),
+      block_hash: `0000${Math.random().toString(16).slice(2, 14)}`,
+      block_time: Math.floor(foundTx.timestamp / 1000),
+    },
+    vin: generateMockInputs(foundTx.inputs || 2),
+    vout: generateMockOutputs(foundTx.outputs || 2, foundTx.value),
+  };
+
+  console.log(`✅ Sending transaction data found in blocks for: ${txid}`);
+  res.json(fullTransaction);
 });
+
+// Generate mock inputs for a transaction
+function generateMockInputs(count: number) {
+  const inputs = [];
+  for (let i = 0; i < count; i++) {
+    inputs.push({
+      txid: `0000${Math.random().toString(16).slice(2, 14)}`,
+      vout: i,
+      prevout: {
+        scriptpubkey: `76a914${Math.random().toString(16).slice(2, 42)}88ac`,
+        scriptpubkey_asm: 'OP_DUP OP_HASH160 ... OP_EQUALVERIFY OP_CHECKSIG',
+        scriptpubkey_type: 'p2pkh',
+        scriptpubkey_address: `bc1q${Math.random().toString(16).slice(2, 34)}`,
+        value: Math.random() * 0.1,
+      },
+      scriptsig: '',
+      scriptsig_asm: '',
+      is_coinbase: false,
+      sequence: 4294967295,
+    });
+  }
+  return inputs;
+}
+
+// Generate mock outputs for a transaction
+function generateMockOutputs(count: number, totalValue?: number) {
+  const outputs = [];
+  const valuePerOutput = (totalValue || Math.random() * 0.5) / count;
+
+  for (let i = 0; i < count; i++) {
+    outputs.push({
+      scriptpubkey: `76a914${Math.random().toString(16).slice(2, 42)}88ac`,
+      scriptpubkey_asm: 'OP_DUP OP_HASH160 ... OP_EQUALVERIFY OP_CHECKSIG',
+      scriptpubkey_type: 'p2pkh',
+      scriptpubkey_address: `bc1q${Math.random().toString(16).slice(2, 34)}`,
+      value: valuePerOutput + (Math.random() * 0.01 - 0.005), // Add some variation
+    });
+  }
+  return outputs;
+}
 
 // Function to create a mock transaction for a given txid
 function createMockTransaction(txid: string) {

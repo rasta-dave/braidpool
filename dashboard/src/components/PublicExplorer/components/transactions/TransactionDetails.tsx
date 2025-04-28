@@ -49,9 +49,14 @@ const TransactionDetails: React.FC = () => {
       // Extract txid from multiple possible URL formats
       let transactionId = txid;
 
+      console.log('🔍 Attempting to extract transaction ID');
+      console.log('📋 URL params txid:', txid);
+      console.log('📋 Current location:', location);
+
       // Try to extract from pathname
       if (!transactionId && location.pathname.includes('/tx/')) {
         transactionId = location.pathname.split('/tx/')[1];
+        console.log('📋 Extracted from pathname:', transactionId);
       }
 
       // Try to extract from hash
@@ -59,24 +64,40 @@ const TransactionDetails: React.FC = () => {
         const hashParts = location.hash.split('/tx/');
         if (hashParts.length > 1) {
           transactionId = hashParts[1];
+          console.log('📋 Extracted from hash:', transactionId);
+        }
+      }
+
+      // If hash contains an explorer pattern
+      if (
+        !transactionId &&
+        location.hash &&
+        location.hash.includes('/explorer/tx/')
+      ) {
+        const hashParts = location.hash.split('/explorer/tx/');
+        if (hashParts.length > 1) {
+          transactionId = hashParts[1];
+          console.log('📋 Extracted from explorer hash:', transactionId);
         }
       }
 
       if (!transactionId) {
-        console.error('Transaction ID not found in URL:', location);
+        console.error('❌ Transaction ID not found in URL:', location);
         setError('Transaction ID not found in URL');
         setLoading(false);
         return;
       }
 
+      console.log('🎯 Final transaction ID for fetching:', transactionId);
+
       try {
-        console.log('Fetching transaction details for:', transactionId);
+        console.log('🔄 Fetching transaction details for:', transactionId);
         const txService = new TransactionService();
         const tx = await txService.getTransaction(transactionId);
-        console.log('Transaction data received:', tx);
+        console.log('✅ Transaction data received:', tx);
         setTransaction(tx);
       } catch (err) {
-        console.error('Error fetching transaction:', err);
+        console.error('❌ Error fetching transaction:', err);
         setError(
           err instanceof Error
             ? err.message

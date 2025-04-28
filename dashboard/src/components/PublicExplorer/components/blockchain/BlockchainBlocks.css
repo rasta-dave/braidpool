@@ -1,0 +1,357 @@
+/* BlockchainBlocks.css - Enhanced visualization for the blockchain explorer */
+
+:root {
+  /* Block sizing variables */
+  --block-size: 125px;
+  --block-3d-height: calc(0.192 * var(--block-size));
+  --block-3d-width: calc(0.16 * var(--block-size));
+  --connector-width: 40px;
+
+  /* Block color variables */
+  --block-color-low: rgba(38, 132, 255, 0.7);
+  --block-color-medium: rgba(91, 159, 255, 0.8);
+  --block-color-high: rgba(143, 186, 255, 0.9);
+  --block-color-full: rgba(196, 214, 255, 1);
+  --block-side-color: #191c27;
+  --block-top-color: #232838;
+
+  /* Shadow and glow effects */
+  --block-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  --block-hover-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  --block-new-glow: 0 0 15px rgba(255, 215, 0, 0.7);
+  --block-changed-glow: 0 0 15px rgba(255, 105, 180, 0.7);
+}
+
+.blockchain-container {
+  width: 100%;
+  overflow-x: auto;
+  padding: 30px 20px 20px;
+  position: relative;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(38, 132, 255, 0.5) rgba(0, 0, 0, 0.1);
+}
+
+.blockchain-container::-webkit-scrollbar {
+  height: 8px;
+}
+
+.blockchain-container::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.blockchain-container::-webkit-scrollbar-thumb {
+  background-color: rgba(38, 132, 255, 0.5);
+  border-radius: 4px;
+}
+
+.blockchain {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  min-height: calc(var(--block-size) * 1.3);
+  padding: 20px 0;
+}
+
+.block-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 20px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.block {
+  width: var(--block-size);
+  height: var(--block-size);
+  position: relative;
+  margin-top: calc(0.2 * var(--block-size));
+  transform-style: preserve-3d;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.block:hover {
+  filter: brightness(1.1);
+}
+
+.block-content {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background-color: var(--block-color-low);
+  box-shadow: var(--block-shadow);
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+/* Exactly matching mempool.space 3D block appearance */
+.block-content::after {
+  content: '';
+  width: var(--block-size);
+  height: calc(0.192 * var(--block-size));
+  position: absolute;
+  top: calc(-0.192 * var(--block-size));
+  left: calc(-0.16 * var(--block-size));
+  background-color: var(--block-top-color);
+  transform: skew(40deg);
+  transform-origin: top;
+  z-index: -1;
+}
+
+.block-content::before {
+  content: '';
+  width: calc(0.16 * var(--block-size));
+  height: var(--block-size);
+  position: absolute;
+  top: calc(-0.096 * var(--block-size));
+  left: calc(-0.16 * var(--block-size));
+  background-color: var(--block-side-color);
+  transform: skewY(50deg);
+  transform-origin: top;
+  z-index: -1;
+}
+
+/* Dynamic block fill levels with gradient background */
+.block-fill-low {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--block-color-low) 0%,
+    var(--block-color-low) 75%,
+    var(--block-color-medium) 75%,
+    var(--block-color-medium) 100%
+  );
+}
+
+.block-fill-medium {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--block-color-low) 0%,
+    var(--block-color-medium) 50%,
+    var(--block-color-high) 50%,
+    var(--block-color-high) 100%
+  );
+}
+
+.block-fill-high {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--block-color-medium) 0%,
+    var(--block-color-high) 25%,
+    var(--block-color-full) 75%,
+    var(--block-color-full) 100%
+  );
+}
+
+.block-fill-full {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--block-color-high) 0%,
+    var(--block-color-full) 40%,
+    var(--block-color-full) 100%
+  );
+}
+
+.block-header,
+.block-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.95);
+  background-color: rgba(0, 0, 0, 0.1);
+  z-index: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.block-header {
+  border-radius: 8px 8px 0 0;
+  padding-top: 8px;
+  padding-bottom: 4px;
+  font-weight: 600;
+}
+
+.block-footer {
+  border-radius: 0 0 8px 8px;
+  padding-top: 4px;
+  padding-bottom: 8px;
+  font-size: 10px;
+}
+
+.block-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 15px;
+  font-size: 12px;
+}
+
+.fees {
+  font-weight: bold;
+  margin-top: 4px;
+}
+
+.fee-span {
+  font-size: 10px;
+  color: rgba(100, 100, 100, 0.8);
+}
+
+.time-indicator {
+  color: rgba(100, 100, 100, 0.8);
+  font-size: 10px;
+  margin-top: 4px;
+}
+
+/* Improved chain connector */
+.chain-connector {
+  width: var(--connector-width);
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    rgba(38, 132, 255, 0.8),
+    rgba(38, 132, 255, 0.4)
+  );
+  position: absolute;
+  right: calc(-1 * var(--connector-width) - 5px);
+  top: calc(var(--block-size) * 0.55);
+  transform: translateY(-50%);
+  z-index: 0;
+}
+
+/* Block link */
+.blockLink {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  z-index: 10;
+}
+
+/* Enhanced animation for new blocks */
+.new-block .block-content {
+  animation: newBlockPulse 2s ease-in-out;
+  box-shadow: var(--block-new-glow);
+}
+
+/* Enhanced animation for changed blocks */
+.changed-block .block-content {
+  animation: changeBlockHighlight 2s ease-in-out;
+  box-shadow: var(--block-changed-glow);
+}
+
+@keyframes newBlockPulse {
+  0% {
+    transform: translateZ(0) scale(0.85);
+    opacity: 0.7;
+  }
+  50% {
+    transform: translateZ(10px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateZ(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes changeBlockHighlight {
+  0% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+/* Loading state animation */
+.block-container.loading .block-content {
+  background-color: rgba(200, 200, 200, 0.2);
+  animation: loadingPulse 1.5s infinite ease-in-out;
+}
+
+.block-container.loading .block-header span,
+.block-container.loading .block-footer span,
+.block-container.loading .block-info span {
+  background-color: rgba(200, 200, 200, 0.3);
+  width: 60%;
+  height: 10px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.block-container.offscreen {
+  opacity: 0;
+  transform: translateX(-50px);
+}
+
+@keyframes loadingPulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.5;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  :root {
+    --block-size: 100px;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --block-size: 80px;
+  }
+
+  .blockchain-container {
+    padding: 20px 10px;
+  }
+
+  .block-header,
+  .block-footer {
+    padding: 6px;
+    font-size: 9px;
+  }
+
+  .block-info {
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --block-size: 60px;
+  }
+
+  .blockchain {
+    padding: 5px 0;
+  }
+
+  .block-container {
+    margin: 0 calc(var(--block-offset) * 0.3);
+  }
+
+  .block-header,
+  .block-footer {
+    padding: 4px;
+    font-size: 8px;
+  }
+}
