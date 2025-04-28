@@ -1,16 +1,52 @@
+:root {
+  --block-size: 140px;
+  --block-3d-height: calc(0.192 * var(--block-size));
+  --block-3d-width: calc(0.16 * var(--block-size));
+}
+
 .block {
-  width: 140px;
-  height: 100px;
+  width: var(--block-size);
+  height: var(--block-size);
   background-color: #1a1a1a;
   border-radius: 6px;
   margin: 0 15px 15px 0;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
+  transform-style: preserve-3d;
+  margin-top: calc(var(--block-3d-height) * 0.5);
+}
+
+.block::after {
+  content: '';
+  width: var(--block-size);
+  height: var(--block-3d-height);
+  position: absolute;
+  top: calc(-1 * var(--block-3d-height));
+  left: calc(-1 * var(--block-3d-width));
+  background-color: #232838;
+  transform: skew(40deg);
+  transform-origin: top;
+  z-index: -1;
+  border-radius: 2px 2px 0 0;
+}
+
+.block::before {
+  content: '';
+  width: var(--block-3d-width);
+  height: var(--block-size);
+  position: absolute;
+  top: calc(-0.5 * var(--block-3d-height));
+  left: calc(-1 * var(--block-3d-width));
+  background-color: #191c27;
+  transform: skewY(50deg);
+  transform-origin: top;
+  z-index: -1;
+  border-radius: 2px 0 0 2px;
 }
 
 .block:hover {
@@ -25,6 +61,7 @@
   background-color: rgba(0, 0, 0, 0.3);
   z-index: 2;
   font-size: 0.8rem;
+  border-radius: 6px 6px 0 0;
 }
 
 .block-height {
