@@ -470,6 +470,7 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
                 onClick={() => handleBlockClick(block as unknown as BlockData)}
                 changed={isChanged}
                 new={isNew}
+                loading={loading && isNew}
               />
             </div>
           );
