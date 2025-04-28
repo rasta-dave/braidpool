@@ -240,6 +240,93 @@ app.get('/blocks/:identifier', (req, res) => {
   return res.json(blockWithTxs);
 });
 
+// Transaction details endpoint - get a specific transaction by txid
+app.get('/tx/:txid', (req, res) => {
+  const txid = req.params.txid;
+  console.log(`📡 GET transaction details for: ${txid}`);
+
+  // Create a mock transaction
+  const mockTransaction = createMockTransaction(txid);
+
+  console.log(`✅ Sending mock transaction data for: ${txid}`);
+  res.json(mockTransaction);
+});
+
+// Function to create a mock transaction for a given txid
+function createMockTransaction(txid: string) {
+  console.log(`🧩 Generating mock transaction data for txid: ${txid}`);
+
+  const timestamp = Date.now() - Math.floor(Math.random() * 1000000);
+  const inputCount = Math.floor(Math.random() * 3) + 1;
+  const outputCount = Math.floor(Math.random() * 3) + 1;
+  const size = Math.floor(Math.random() * 500) + 200;
+  const weight = size * 4;
+  const fee = Math.random() * 0.0005 + 0.0001;
+  const feePerVsize = (fee / (weight / 4)) * 100000000; // Convert to satoshis/vB
+
+  // Create mock inputs
+  const inputs = [];
+  for (let i = 0; i < inputCount; i++) {
+    inputs.push({
+      txid: `0000${Math.random().toString(16).slice(2, 14)}`,
+      vout: i,
+      prevout: {
+        scriptpubkey: `76a914${Math.random().toString(16).slice(2, 42)}88ac`,
+        scriptpubkey_asm: 'OP_DUP OP_HASH160 ... OP_EQUALVERIFY OP_CHECKSIG',
+        scriptpubkey_type: 'p2pkh',
+        scriptpubkey_address: `bc1q${Math.random().toString(16).slice(2, 34)}`,
+        value: Math.random() * 0.1,
+      },
+      scriptsig: '',
+      scriptsig_asm: '',
+      is_coinbase: false,
+      sequence: 4294967295,
+    });
+  }
+
+  // Create mock outputs
+  const outputs = [];
+  const totalValue = Math.random() * 0.5;
+  const valuePerOutput = totalValue / outputCount;
+
+  for (let i = 0; i < outputCount; i++) {
+    outputs.push({
+      scriptpubkey: `76a914${Math.random().toString(16).slice(2, 42)}88ac`,
+      scriptpubkey_asm: 'OP_DUP OP_HASH160 ... OP_EQUALVERIFY OP_CHECKSIG',
+      scriptpubkey_type: 'p2pkh',
+      scriptpubkey_address: `bc1q${Math.random().toString(16).slice(2, 34)}`,
+      value: valuePerOutput + (Math.random() * 0.01 - 0.005), // Add some variation
+    });
+  }
+
+  return {
+    txid: txid,
+    hash: txid,
+    version: 1,
+    size: size,
+    weight: weight,
+    locktime: 0,
+    height: 1000 + Math.floor(Math.random() * 50),
+    timestamp: Math.floor(timestamp / 1000),
+    work: Math.floor(Math.random() * 100) + 1000,
+    parents: [
+      `0000${Math.random().toString(16).slice(2, 14)}`,
+      `0000${Math.random().toString(16).slice(2, 14)}`,
+    ],
+    miner: `Miner${Math.floor(Math.random() * 5) + 1}`,
+    fee: fee,
+    feePerVsize: feePerVsize,
+    status: {
+      confirmed: true,
+      block_height: 1000 + Math.floor(Math.random() * 50),
+      block_hash: `0000${Math.random().toString(16).slice(2, 14)}`,
+      block_time: Math.floor(timestamp / 1000),
+    },
+    vin: inputs,
+    vout: outputs,
+  };
+}
+
 // Function to create a mock block for a given hash
 function createMockBlockForHash(hash: string) {
   const miners = ['Miner1', 'Miner2', 'Miner3', 'Miner4', 'Miner5'];

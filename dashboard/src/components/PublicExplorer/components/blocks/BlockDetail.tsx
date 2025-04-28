@@ -20,6 +20,7 @@ import {
   timeAgo,
 } from '../../utils';
 import BlockTransactions from './BlockTransactions';
+import { BraidTransaction } from '../transactions/BraidTransaction';
 
 export interface Block {
   hash: string;
@@ -39,16 +40,7 @@ export interface Block {
   nextBlockHash?: string;
 }
 
-export interface Transaction {
-  txid: string;
-  timestamp: number;
-  size: number;
-  weight: number;
-  fee: number;
-  value: number;
-  inputs: number;
-  outputs: number;
-}
+export interface Transaction extends BraidTransaction {}
 
 interface BlockDetailProps {
   block: Block | null;
@@ -104,15 +96,16 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
 
   return (
     <Box>
-      <Card sx={{ mb: 3 }}>
+      <Card sx={{ mb: 3 }} className="block-detail">
         <CardContent>
           <Box
             display="flex"
             justifyContent="space-between"
             alignItems="center"
             mb={2}
+            className="block-header"
           >
-            <Typography variant="h5" component="h1">
+            <Typography variant="h5" component="h1" className="block-title">
               Block #{block.height.toLocaleString()}
               <Tooltip title={timeAgo(block.timestamp)}>
                 <Chip
@@ -125,18 +118,30 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
             </Typography>
           </Box>
 
-          <Typography variant="subtitle1" gutterBottom mb={2}>
+          <Typography
+            variant="subtitle1"
+            gutterBottom
+            mb={2}
+            className="block-hash"
+          >
             Block Hash:
             <Typography component="span" fontFamily="monospace">
               {block.hash}
             </Typography>
           </Typography>
 
-          <Box display="flex" flexDirection="row" gap={2} mb={2}>
+          <Box
+            display="flex"
+            flexDirection="row"
+            gap={2}
+            mb={2}
+            className="navigation-links"
+          >
             {block.previousBlockHash && (
               <Link
                 href={`#/explorer/block/${block.previousBlockHash}`}
                 underline="hover"
+                className="nav-link"
               >
                 ← Previous Block
               </Link>
@@ -145,6 +150,7 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
               <Link
                 href={`#/explorer/block/${block.nextBlockHash}`}
                 underline="hover"
+                className="nav-link"
               >
                 Next Block →
               </Link>
@@ -153,7 +159,7 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
 
           <Divider sx={{ my: 2 }} />
 
-          <Grid container spacing={2}>
+          <Grid container spacing={2} className="block-info">
             {blockInfo.map((info) => (
               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={info.label}>
                 <Paper
@@ -164,8 +170,13 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
                     display: 'flex',
                     flexDirection: 'column',
                   }}
+                  className="info-item"
                 >
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    className="info-label"
+                  >
                     {info.label}
                   </Typography>
                   {info.tooltip ? (
@@ -180,6 +191,7 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
                               ? 'monospace'
                               : 'inherit',
                         }}
+                        className="info-value"
                       >
                         {info.value}
                       </Typography>
@@ -195,6 +207,7 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
                             ? 'monospace'
                             : 'inherit',
                       }}
+                      className="info-value"
                     >
                       {info.value}
                     </Typography>
@@ -206,7 +219,9 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
         </CardContent>
       </Card>
 
-      <BlockTransactions transactions={block.transactions} />
+      <div className="transactions-container">
+        <BlockTransactions transactions={block.transactions} />
+      </div>
     </Box>
   );
 };

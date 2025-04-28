@@ -5,8 +5,22 @@
 /**
  * Formats a Unix timestamp into a readable date string
  */
-export function formatTimestamp(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleString();
+export function formatTimestamp(
+  timestamp: number,
+  shortFormat: boolean = false
+): string {
+  const date = new Date(timestamp);
+
+  if (shortFormat) {
+    return date.toLocaleString(undefined, {
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  return date.toLocaleString();
 }
 
 /**

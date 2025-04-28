@@ -31,7 +31,9 @@
   "include": [
     "src",
     "src/components/PublicExplorer/utils.ts",
-    "src/components/PublicExplorer/utils.d.ts"
+    "src/components/PublicExplorer/utils.d.ts",
+    "src/components/PublicExplorer/components/transactions/*.ts",
+    "src/components/PublicExplorer/components/transactions/*.tsx"
   ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -1,7 +1,10 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import {
-  Box,
   Typography,
+  Box,
+  Card,
+  CardContent,
   Table,
   TableBody,
   TableCell,
@@ -9,24 +12,17 @@ import {
   TableHead,
   TableRow,
   Paper,
-  Link,
-  Chip,
+  Tooltip,
 } from '@mui/material';
-import {
-  formatTimestamp,
-  formatBtcValue,
-  truncateString,
-} from './BlockTransactionsUtils';
+import { formatTimestamp, formatBtcValue, formatFileSize } from '../../utils';
 
-export interface Transaction {
+interface Transaction {
   txid: string;
   timestamp: number;
   size: number;
-  weight: number;
   fee: number;
-  value: number;
-  inputs: number;
-  outputs: number;
+  vin?: any[];
+  vout?: any[];
 }
 
 interface BlockTransactionsProps {
@@ -36,65 +32,84 @@ interface BlockTransactionsProps {
 const BlockTransactions: React.FC<BlockTransactionsProps> = ({
   transactions,
 }) => {
-  if (!transactions || transactions.length === 0) {
-    return (
-      <Box mt={2}>
-        <Typography variant="subtitle1">
-          No transactions found in this block
-        </Typography>
-      </Box>
-    );
-  }
-
   return (
-    <Box mt={3}>
-      <Typography variant="h6" gutterBottom>
-        Transactions ({transactions.length})
-      </Typography>
+    <Box>
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
+            Transactions ({transactions.length})
+          </Typography>
 
-      <TableContainer component={Paper}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>TX ID</TableCell>
-              <TableCell>Time</TableCell>
-              <TableCell align="right">Value</TableCell>
-              <TableCell align="right">Fee</TableCell>
-              <TableCell align="right">Size</TableCell>
-              <TableCell align="right">In/Out</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {transactions.map((tx) => (
-              <TableRow key={tx.txid} hover>
-                <TableCell>
-                  <Link
-                    href={`#/explorer/tx/${tx.txid}`}
-                    sx={{
-                      textDecoration: 'none',
-                      '&:hover': { textDecoration: 'underline' },
-                    }}
-                  >
-                    {truncateString(tx.txid, 12)}
-                  </Link>
-                </TableCell>
-                <TableCell>{formatTimestamp(tx.timestamp)}</TableCell>
-                <TableCell align="right">{formatBtcValue(tx.value)}</TableCell>
-                <TableCell align="right">{formatBtcValue(tx.fee)}</TableCell>
-                <TableCell align="right">{tx.size} bytes</TableCell>
-                <TableCell align="right">
-                  <Chip
-                    size="small"
-                    color="primary"
-                    label={`${tx.inputs}/${tx.outputs}`}
-                    sx={{ minWidth: '60px' }}
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+          <TableContainer
+            component={Paper}
+            elevation={0}
+            sx={{ bgcolor: 'background.default' }}
+          >
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>TX ID</TableCell>
+                  <TableCell>Time</TableCell>
+                  <TableCell align="right">Value</TableCell>
+                  <TableCell align="right">Fee</TableCell>
+                  <TableCell align="right">Size</TableCell>
+                  <TableCell align="center">In/Out</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {transactions.map((tx) => (
+                  <TableRow key={tx.txid} hover>
+                    <TableCell>
+                      <Typography
+                        component={Link}
+                        to={`#/explorer/tx/${tx.txid}`}
+                        sx={{
+                          color: 'primary.main',
+                          textDecoration: 'none',
+                          fontFamily: 'monospace',
+                          '&:hover': {
+                            textDecoration: 'underline',
+                          },
+                        }}
+                      >
+                        {tx.txid.slice(0, 16)}...
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title={formatTimestamp(tx.timestamp)}>
+                        <Typography variant="body2" color="text.secondary">
+                          {formatTimestamp(tx.timestamp, true)}
+                        </Typography>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontFamily="monospace" fontWeight="medium">
+                        {formatBtcValue(tx.fee * 100)}{' '}
+                        {/* Using fee as a placeholder for value */}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontFamily="monospace" fontWeight="medium">
+                        {formatBtcValue(tx.fee)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Typography fontFamily="monospace" color="text.secondary">
+                        {formatFileSize(tx.size)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography fontFamily="monospace">
+                        {tx.vin?.length || 0}/{tx.vout?.length || 0}
+                      </Typography>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </CardContent>
+      </Card>
     </Box>
   );
 };

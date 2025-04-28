@@ -1,0 +1,149 @@
+.transaction-details {
+  padding: 20px;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin: 20px;
+}
+
+.transaction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.transaction-title {
+  font-size: 24px;
+  color: #333;
+  margin: 0;
+}
+
+.txid {
+  font-family: monospace;
+  word-break: break-all;
+  color: #495057;
+  margin: 10px 0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.label {
+  color: #6c757d;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.value {
+  color: #212529;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status .confirmed {
+  color: #28a745;
+}
+
+.status .unconfirmed {
+  color: #ffc107;
+}
+
+.info-section {
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.info-section h3 {
+  color: #495057;
+  margin-bottom: 15px;
+  font-size: 18px;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 10px;
+}
+
+.inputs-list,
+.outputs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.input-item,
+.output-item {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.input-header,
+.output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.index {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.coinbase {
+  color: #28a745;
+  font-weight: 500;
+}
+
+.input-details,
+.output-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #495057;
+}
+
+.address {
+  word-break: break-all;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.type {
+  color: #6c757d;
+  font-size: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
+}
+
+.error {
+  text-align: center;
+  padding: 40px;
+  color: #dc3545;
+}
