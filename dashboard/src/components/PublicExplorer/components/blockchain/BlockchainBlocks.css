@@ -38,6 +38,10 @@
   scrollbar-width: none; /* Hide scrollbar for Firefox */
   user-select: none;
   perspective: 1000px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 250px; /* Ensure enough height for container */
 }
 
 /* Hide scrollbar for Chrome, Safari and Opera */
@@ -73,6 +77,7 @@
   position: relative;
   height: 210px;
   width: 2000px; /* Set a large width for the chain */
+  margin: 0 auto;
 }
 
 .block-container {

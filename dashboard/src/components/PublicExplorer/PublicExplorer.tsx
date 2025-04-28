@@ -714,26 +714,15 @@ const PublicExplorer: React.FC = () => {
 
               {/* Blockchain Visualization */}
               <Card sx={{ mb: 3 }} className="explorer-card">
-                <CardContent>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      mb: 2,
-                    }}
-                  >
-                    <Typography variant="h6">Latest Blocks</Typography>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={toggleBlockDisplay}
-                    >
-                      {displayBlockCount === 12
-                        ? 'Show All Blocks'
-                        : 'Show Fewer Blocks'}
-                    </Button>
-                  </Box>
+                <CardContent
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: '300px',
+                  }}
+                >
+                  {/* Spacer div to maintain vertical positioning */}
+                  <Box sx={{ height: '32px', mb: '8px' }}></Box>
                   <BlockchainBlocks
                     blocks={memoizedBlocks.map((block) => ({
                       block_height: block.height,

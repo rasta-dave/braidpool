@@ -104,10 +104,15 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     // Compare with previous blocks to detect new ones
     const prevHashes = prevBlocksRef.current.map((b) => b.hash);
 
+    // Calculate the center position
+    const containerWidth = containerRef.current?.offsetWidth || 1000;
+    const totalBlocksWidth = blocks.length * BLOCK_WIDTH;
+    const startPosition = Math.max(0, (containerWidth - totalBlocksWidth) / 2);
+
     blocks.forEach((block, index) => {
       const isNew =
         newBlocks.includes(block.hash) || !prevHashes.includes(block.hash);
-      const leftPosition = index * BLOCK_WIDTH;
+      const leftPosition = startPosition + index * BLOCK_WIDTH;
 
       newStyles[block.hash] = {
         left: `${leftPosition}px`,
@@ -356,18 +361,22 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     };
   }, [isDragging, handleTouchMove, handleTouchEnd]);
 
-  // Monitor window resize to recalculate visible blocks
+  // Recalculate when container size changes
   useEffect(() => {
     const handleResize = () => {
+      calculateBlockStyles();
       calculateVisibleBlocks();
     };
 
     window.addEventListener('resize', handleResize);
 
+    // Initial calculation
+    handleResize();
+
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [calculateVisibleBlocks]);
+  }, [calculateBlockStyles, calculateVisibleBlocks]);
 
   // Only render blocks in the visible range (with buffer)
   const visibleBlocks = blocks.slice(visibleRange.start, visibleRange.end);
