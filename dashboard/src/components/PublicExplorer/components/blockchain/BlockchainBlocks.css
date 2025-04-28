@@ -1,10 +1,11 @@
 /* BlockchainBlocks.css - Enhanced visualization for the blockchain explorer */
 
 :root {
-  /* Block sizing variables */
+  /* Block sizing variables using the mempool.space ratios */
   --block-size: 125px;
   --block-3d-height: calc(0.192 * var(--block-size));
   --block-3d-width: calc(0.16 * var(--block-size));
+  --block-offset: calc(0.32 * var(--block-size));
   --connector-width: 40px;
 
   /* Block color variables */
@@ -14,6 +15,7 @@
   --block-color-full: rgba(196, 214, 255, 1);
   --block-side-color: #191c27;
   --block-top-color: #232838;
+  --block-secondary-color: rgba(255, 255, 255, 0.1);
 
   /* Shadow and glow effects */
   --block-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
@@ -23,50 +25,78 @@
 }
 
 .blockchain-container {
+  position: relative;
   width: 100%;
   overflow-x: auto;
-  padding: 30px 20px 20px;
-  position: relative;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(38, 132, 255, 0.5) rgba(0, 0, 0, 0.1);
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding: 20px 0;
+  cursor: grab;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  -ms-overflow-style: none; /* Hide scrollbar for IE and Edge */
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+  user-select: none;
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
 .blockchain-container::-webkit-scrollbar {
-  height: 8px;
+  display: none;
 }
 
-.blockchain-container::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 4px;
+.blockchain-container.dragging {
+  cursor: grabbing;
+  scroll-behavior: auto;
 }
 
-.blockchain-container::-webkit-scrollbar-thumb {
-  background-color: rgba(38, 132, 255, 0.5);
-  border-radius: 4px;
+.blockchain-container.momentum {
+  scroll-behavior: auto;
+}
+
+.scroll-indicator {
+  display: none;
+}
+
+.scroll-indicator-left {
+  display: none;
+}
+
+.scroll-indicator-right {
+  display: none;
 }
 
 .blockchain {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: center;
-  min-height: calc(var(--block-size) * 1.3);
-  padding: 20px 0;
+  display: inline-flex;
+  padding: 0 20px;
+  min-height: 180px;
 }
 
 .block-container {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
-  margin: 0 20px;
-  position: relative;
-  transition: all 0.3s ease;
+  margin: 0 10px;
+  scroll-snap-align: center;
+  transition: transform 0.2s;
+}
+
+.block-container:hover {
+  transform: translateY(-5px);
+}
+
+/* Add visual feedback for when at the edges of scrolling */
+.blockchain-container::before,
+.blockchain-container::after {
+  display: none;
 }
 
 .block {
   width: var(--block-size);
   height: var(--block-size);
   position: relative;
-  margin-top: calc(0.2 * var(--block-size));
+  margin-top: calc(var(--block-3d-height) * 0.5);
   transform-style: preserve-3d;
   transition: all 0.3s ease;
   cursor: pointer;
@@ -74,6 +104,18 @@
 
 .block:hover {
   filter: brightness(1.1);
+  transform: translateY(-2px);
+}
+
+/* Block container transitions */
+.block-container.entering {
+  opacity: 0;
+  transform: translateX(50px);
+}
+
+.block-container.exiting {
+  opacity: 0;
+  transform: translateX(-50px);
 }
 
 .block-content {
@@ -83,7 +125,7 @@
   background-color: var(--block-color-low);
   box-shadow: var(--block-shadow);
   border-radius: 8px;
-  transition: all 0.3s ease;
+  transition: background 2s, transform 0.3s ease;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -94,65 +136,68 @@
 .block-content::after {
   content: '';
   width: var(--block-size);
-  height: calc(0.192 * var(--block-size));
+  height: var(--block-3d-height);
   position: absolute;
-  top: calc(-0.192 * var(--block-size));
-  left: calc(-0.16 * var(--block-size));
+  top: calc(-1 * var(--block-3d-height));
+  left: calc(-1 * var(--block-3d-width));
   background-color: var(--block-top-color);
   transform: skew(40deg);
   transform-origin: top;
   z-index: -1;
+  transition: background-color 0.3s ease;
 }
 
 .block-content::before {
   content: '';
-  width: calc(0.16 * var(--block-size));
+  width: var(--block-3d-width);
   height: var(--block-size);
   position: absolute;
-  top: calc(-0.096 * var(--block-size));
-  left: calc(-0.16 * var(--block-size));
+  top: calc(-0.5 * var(--block-3d-height));
+  left: calc(-1 * var(--block-3d-width));
   background-color: var(--block-side-color);
   transform: skewY(50deg);
   transform-origin: top;
   z-index: -1;
+  transition: background-color 0.3s ease;
 }
 
-/* Dynamic block fill levels with gradient background */
+/* Dynamic block fill levels with gradient background based on mempool.space approach */
 .block-fill-low {
   background: repeating-linear-gradient(
     to bottom,
-    var(--block-color-low) 0%,
+    var(--block-secondary-color),
+    var(--block-secondary-color) 75%,
     var(--block-color-low) 75%,
-    var(--block-color-medium) 75%,
-    var(--block-color-medium) 100%
+    var(--block-color-low) 100%
   );
 }
 
 .block-fill-medium {
   background: repeating-linear-gradient(
     to bottom,
-    var(--block-color-low) 0%,
+    var(--block-secondary-color),
+    var(--block-secondary-color) 50%,
     var(--block-color-medium) 50%,
-    var(--block-color-high) 50%,
-    var(--block-color-high) 100%
+    var(--block-color-medium) 100%
   );
 }
 
 .block-fill-high {
   background: repeating-linear-gradient(
     to bottom,
-    var(--block-color-medium) 0%,
+    var(--block-secondary-color),
+    var(--block-secondary-color) 25%,
     var(--block-color-high) 25%,
-    var(--block-color-full) 75%,
-    var(--block-color-full) 100%
+    var(--block-color-high) 100%
   );
 }
 
 .block-fill-full {
   background: repeating-linear-gradient(
     to bottom,
-    var(--block-color-high) 0%,
-    var(--block-color-full) 40%,
+    var(--block-secondary-color),
+    var(--block-secondary-color) 10%,
+    var(--block-color-full) 10%,
     var(--block-color-full) 100%
   );
 }
@@ -211,7 +256,7 @@
   margin-top: 4px;
 }
 
-/* Improved chain connector */
+/* Improved chain connector based on mempool.space */
 .chain-connector {
   width: var(--connector-width);
   height: 3px;
@@ -251,107 +296,108 @@
 
 @keyframes newBlockPulse {
   0% {
-    transform: translateZ(0) scale(0.85);
+    transform: scale(0.95);
     opacity: 0.7;
   }
   50% {
-    transform: translateZ(10px) scale(1.05);
+    transform: scale(1.05);
     opacity: 1;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.9);
   }
   100% {
-    transform: translateZ(0) scale(1);
+    transform: scale(1);
     opacity: 1;
   }
 }
 
 @keyframes changeBlockHighlight {
   0% {
-    filter: brightness(1);
+    box-shadow: 0 0 5px rgba(255, 105, 180, 0.3);
   }
   50% {
-    filter: brightness(1.3);
+    box-shadow: 0 0 20px rgba(255, 105, 180, 0.8);
   }
   100% {
-    filter: brightness(1);
+    box-shadow: 0 0 5px rgba(255, 105, 180, 0.3);
   }
 }
 
-/* Loading state animation */
 .block-container.loading .block-content {
-  background-color: rgba(200, 200, 200, 0.2);
-  animation: loadingPulse 1.5s infinite ease-in-out;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loadingPulse 1.5s infinite;
 }
 
 .block-container.loading .block-header span,
 .block-container.loading .block-footer span,
 .block-container.loading .block-info span {
-  background-color: rgba(200, 200, 200, 0.3);
-  width: 60%;
-  height: 10px;
+  background-color: #e0e0e0;
+  color: transparent;
   border-radius: 4px;
-  display: inline-block;
+  animation: loadingPulse 1.5s infinite;
 }
 
 .block-container.offscreen {
+  transform: translateX(-100px);
   opacity: 0;
-  transform: translateX(-50px);
 }
 
 @keyframes loadingPulse {
   0% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.8;
+    background-position: 200% 0;
   }
   100% {
-    opacity: 0.5;
+    background-position: -200% 0;
   }
 }
 
-/* Responsive adjustments */
+/* Responsive design adjustments */
 @media (max-width: 1200px) {
   :root {
-    --block-size: 100px;
+    --block-size: 110px;
+    --connector-width: 35px;
   }
 }
 
 @media (max-width: 768px) {
   :root {
-    --block-size: 80px;
+    --block-size: 95px;
+    --connector-width: 30px;
   }
 
   .blockchain-container {
-    padding: 20px 10px;
+    padding: 25px 15px 15px;
+  }
+
+  .block-header,
+  .block-footer {
+    padding: 8px;
+    font-size: 10px;
+  }
+
+  .block-info {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --block-size: 80px;
+    --connector-width: 25px;
+  }
+
+  .blockchain {
+    padding: 15px 0;
+    padding-right: var(--block-size); /* Maintain padding for first block */
+  }
+
+  .block-container {
+    margin: 0 15px;
   }
 
   .block-header,
   .block-footer {
     padding: 6px;
     font-size: 9px;
-  }
-
-  .block-info {
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 480px) {
-  :root {
-    --block-size: 60px;
-  }
-
-  .blockchain {
-    padding: 5px 0;
-  }
-
-  .block-container {
-    margin: 0 calc(var(--block-offset) * 0.3);
-  }
-
-  .block-header,
-  .block-footer {
-    padding: 4px;
-    font-size: 8px;
   }
 }

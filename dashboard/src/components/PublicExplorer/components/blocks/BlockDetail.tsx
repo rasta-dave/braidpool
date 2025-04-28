@@ -4,12 +4,20 @@ import {
   Card,
   CardContent,
   Divider,
-  Grid,
+  Stack,
   Paper,
   Typography,
   Chip,
   Tooltip,
   Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  CircularProgress,
+  Alert,
 } from '@mui/material';
 import {
   formatTimestamp,
@@ -21,6 +29,18 @@ import {
 } from '../../utils';
 import BlockTransactions from './BlockTransactions';
 import { BraidTransaction } from '../transactions/BraidTransaction';
+import { formatDistanceToNow } from 'date-fns';
+
+export interface Transaction {
+  txid: string;
+  timestamp: number;
+  size: number;
+  weight: number;
+  fee: number;
+  value: number;
+  inputs?: any[];
+  outputs?: any[];
+}
 
 export interface Block {
   hash: string;
@@ -36,14 +56,12 @@ export interface Block {
   confirmations: number;
   transactions: Transaction[];
   fees: number;
-  previousBlockHash: string;
+  previousBlockHash?: string;
   nextBlockHash?: string;
 }
 
-export interface Transaction extends BraidTransaction {}
-
 interface BlockDetailProps {
-  block: Block | null;
+  block: Block;
   isLoading?: boolean;
   error?: string;
 }
@@ -54,174 +72,209 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
   error,
 }) => {
   if (isLoading) {
-    return <Typography>Loading block information... 🔄</Typography>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
   }
 
   if (error) {
     return (
-      <Typography color="error">Error loading block: {error} ❌</Typography>
+      <Alert severity="error" sx={{ mb: 2 }}>
+        Error loading block details: {error}
+      </Alert>
     );
   }
 
-  if (!block) {
-    return (
-      <Typography>
-        No block information available. Select a block to view details. 🔍
-      </Typography>
-    );
-  }
+  // Format timestamp to human-readable time
+  const formatTimestamp = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
+  };
 
-  // Data for display in the info grid
-  const blockInfo = [
-    { label: 'Block Height', value: block.height.toLocaleString() },
-    {
-      label: 'Timestamp',
-      value: formatTimestamp(block.timestamp),
-      tooltip: timeAgo(block.timestamp),
-    },
-    {
-      label: 'Transactions',
-      value: block.transactions.length.toLocaleString(),
-    },
-    { label: 'Size', value: formatFileSize(block.size) },
-    { label: 'Weight', value: `${block.weight.toLocaleString()} WU` },
-    { label: 'Confirmations', value: block.confirmations.toLocaleString() },
-    { label: 'Difficulty', value: formatDifficulty(block.difficulty) },
-    { label: 'Bits', value: block.bits },
-    { label: 'Nonce', value: block.nonce.toLocaleString() },
-    { label: 'Version', value: `0x${block.version.toString(16)}` },
-    { label: 'Merkle Root', value: truncateString(block.merkleRoot, 12) },
-    { label: 'Total Fees', value: formatBtcValue(block.fees) },
-  ];
+  // Format time from now
+  const formatTimeAgo = (timestamp: number): string => {
+    const date = new Date(timestamp * 1000);
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
+
+  // Format size in KB
+  const formatSize = (size: number): string => {
+    return `${(size / 1024).toFixed(2)} KB`;
+  };
+
+  // Format satoshis to BTC
+  const formatBTC = (satoshis: number): string => {
+    return `${(satoshis / 100000000).toFixed(8)} BTC`;
+  };
 
   return (
     <Box>
-      <Card sx={{ mb: 3 }} className="block-detail">
+      <Typography variant="h4" gutterBottom>
+        Block #{block.height}
+      </Typography>
+
+      <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            mb={2}
-            className="block-header"
+          <Stack
+            spacing={2}
+            direction={{ xs: 'column', sm: 'row' }}
+            flexWrap="wrap"
           >
-            <Typography variant="h5" component="h1" className="block-title">
-              Block #{block.height.toLocaleString()}
-              <Tooltip title={timeAgo(block.timestamp)}>
+            <Box sx={{ width: { xs: '100%', md: '48%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Block Hash
+              </Typography>
+              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                {block.hash}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '100%', md: '48%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Timestamp
+              </Typography>
+              <Typography variant="body1">
+                {formatTimestamp(block.timestamp)}
                 <Chip
                   size="small"
-                  label={formatTimestamp(block.timestamp)}
-                  color="primary"
-                  sx={{ ml: 2 }}
+                  label={formatTimeAgo(block.timestamp)}
+                  sx={{ ml: 1, fontSize: '0.75rem' }}
                 />
-              </Tooltip>
-            </Typography>
-          </Box>
+              </Typography>
+            </Box>
 
-          <Typography
-            variant="subtitle1"
-            gutterBottom
-            mb={2}
-            className="block-hash"
-          >
-            Block Hash:
-            <Typography component="span" fontFamily="monospace">
-              {block.hash}
-            </Typography>
-          </Typography>
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Size
+              </Typography>
+              <Typography variant="body1">{formatSize(block.size)}</Typography>
+            </Box>
 
-          <Box
-            display="flex"
-            flexDirection="row"
-            gap={2}
-            mb={2}
-            className="navigation-links"
-          >
-            {block.previousBlockHash && (
-              <Link
-                href={`#/explorer/block/${block.previousBlockHash}`}
-                underline="hover"
-                className="nav-link"
-              >
-                ← Previous Block
-              </Link>
-            )}
-            {block.nextBlockHash && (
-              <Link
-                href={`#/explorer/block/${block.nextBlockHash}`}
-                underline="hover"
-                className="nav-link"
-              >
-                Next Block →
-              </Link>
-            )}
-          </Box>
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Weight
+              </Typography>
+              <Typography variant="body1">
+                {(block.weight / 1000).toFixed(2)} kWU
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Confirmations
+              </Typography>
+              <Typography variant="body1">{block.confirmations}</Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Difficulty
+              </Typography>
+              <Typography variant="body1">
+                {block.difficulty.toLocaleString()}
+              </Typography>
+            </Box>
+          </Stack>
 
           <Divider sx={{ my: 2 }} />
 
-          <Grid container spacing={2} className="block-info">
-            {blockInfo.map((info) => (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={info.label}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    bgcolor: 'background.default',
-                    display: 'flex',
-                    flexDirection: 'column',
-                  }}
-                  className="info-item"
-                >
-                  <Typography
-                    variant="caption"
-                    color="text.secondary"
-                    className="info-label"
-                  >
-                    {info.label}
-                  </Typography>
-                  {info.tooltip ? (
-                    <Tooltip title={info.tooltip} placement="top" arrow>
-                      <Typography
-                        variant="body2"
-                        fontWeight="medium"
-                        sx={{
-                          wordBreak: 'break-all',
-                          fontFamily:
-                            info.label === 'Merkle Root'
-                              ? 'monospace'
-                              : 'inherit',
-                        }}
-                        className="info-value"
-                      >
-                        {info.value}
-                      </Typography>
-                    </Tooltip>
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      fontWeight="medium"
-                      sx={{
-                        wordBreak: 'break-all',
-                        fontFamily:
-                          info.label === 'Merkle Root'
-                            ? 'monospace'
-                            : 'inherit',
-                      }}
-                      className="info-value"
-                    >
-                      {info.value}
-                    </Typography>
-                  )}
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
+          <Stack
+            spacing={2}
+            direction={{ xs: 'column', sm: 'row' }}
+            flexWrap="wrap"
+          >
+            <Box sx={{ width: { xs: '100%', md: '48%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Merkle Root
+              </Typography>
+              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                {block.merkleRoot}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '100%', md: '48%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Previous Block
+              </Typography>
+              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
+                {block.previousBlockHash || 'Genesis Block'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Version
+              </Typography>
+              <Typography variant="body1">{block.version}</Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Bits
+              </Typography>
+              <Typography variant="body1">{block.bits}</Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Nonce
+              </Typography>
+              <Typography variant="body1">
+                {block.nonce.toLocaleString()}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Total Fees
+              </Typography>
+              <Typography variant="body1">{formatBTC(block.fees)}</Typography>
+            </Box>
+          </Stack>
         </CardContent>
       </Card>
 
-      <div className="transactions-container">
-        <BlockTransactions transactions={block.transactions} />
-      </div>
+      <Typography variant="h5" gutterBottom>
+        Transactions ({block.transactions.length})
+      </Typography>
+
+      <TableContainer component={Paper}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Transaction ID</TableCell>
+              <TableCell align="right">Size</TableCell>
+              <TableCell align="right">Weight</TableCell>
+              <TableCell align="right">Fee</TableCell>
+              <TableCell align="right">Value</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {block.transactions.map((tx) => (
+              <TableRow key={tx.txid} hover>
+                <TableCell sx={{ wordBreak: 'break-all' }}>{tx.txid}</TableCell>
+                <TableCell align="right">{formatSize(tx.size)}</TableCell>
+                <TableCell align="right">
+                  {(tx.weight / 1000).toFixed(2)} kWU
+                </TableCell>
+                <TableCell align="right">
+                  {(tx.fee / 100000000).toFixed(8)} BTC
+                </TableCell>
+                <TableCell align="right">{formatBTC(tx.value)}</TableCell>
+              </TableRow>
+            ))}
+            {block.transactions.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} align="center">
+                  No transactions in this block
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
     </Box>
   );
 };

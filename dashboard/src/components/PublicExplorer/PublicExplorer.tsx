@@ -178,6 +178,7 @@ const PublicExplorer: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [displayBlockCount, setDisplayBlockCount] = useState(12); // Default to show fewer blocks
   const prevBlocksRef = useRef<BlockData[]>([]);
   const prevStatsRef = useRef<NetworkStats>(mockNetworkStats);
   const prevTransactionsRef = useRef<TransactionData[]>([]);
@@ -408,6 +409,13 @@ const PublicExplorer: React.FC = () => {
   const handleBackToExplorer = () => {
     setSelectedBlock(null);
     setBlockDetailError(null);
+  };
+
+  // Toggle function to switch between showing fewer/more blocks
+  const toggleBlockDisplay = () => {
+    setDisplayBlockCount((prevCount) =>
+      prevCount === 12 ? networkStats.totalBlocks : 12
+    );
   };
 
   useEffect(() => {
@@ -707,13 +715,31 @@ const PublicExplorer: React.FC = () => {
               {/* Blockchain Visualization */}
               <Card sx={{ mb: 3 }} className="explorer-card">
                 <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Latest Blocks
-                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      mb: 2,
+                    }}
+                  >
+                    <Typography variant="h6">Latest Blocks</Typography>
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={toggleBlockDisplay}
+                    >
+                      {displayBlockCount === 12
+                        ? 'Show All Blocks'
+                        : 'Show Fewer Blocks'}
+                    </Button>
+                  </Box>
                   <BlockchainBlocks
                     blocks={memoizedBlocks.map((block) => ({
                       block_height: block.height,
                       block_hash: block.hash,
+                      hash: block.hash,
+                      height: block.height,
                       size: block.size || 1000,
                       weight: block.weight || 4000,
                       tx_count: block.transactions,
@@ -732,7 +758,7 @@ const PublicExplorer: React.FC = () => {
                       changedProperties: block.changed || [],
                     }))}
                     loading={initialLoad}
-                    maxBlocksToShow={12}
+                    maxBlocksToShow={displayBlockCount}
                     onBlockSelected={(block) =>
                       handleBlockClick(block.block_hash)
                     }

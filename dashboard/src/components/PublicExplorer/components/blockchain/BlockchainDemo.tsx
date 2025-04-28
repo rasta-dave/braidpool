@@ -14,16 +14,21 @@ import {
 } from '@mui/material';
 import { BlockchainBlocks } from './';
 
-// Sample mock data
+// Sample mock data with more realistic values
 const generateMockBlocks = (count: number, fillLevel: number = 0.5) => {
   const blocks = [];
   const startHeight = 1000;
+  const BLOCK_WEIGHT_UNITS = 4000000; // Max block weight units
 
   for (let i = 0; i < count; i++) {
     // Generate random values with some consistency
     const txCount = Math.floor(Math.random() * 2500) + 10;
+    // Size is related to transaction count and fill level
     const baseSize = Math.floor(txCount * 500 * fillLevel);
-    const feeBase = 5 + Math.random() * 50;
+    // Weight is typically 4x size in segwit blocks
+    const weight = Math.min(baseSize * 4, BLOCK_WEIGHT_UNITS);
+    // More realistic fee calculation
+    const feeRate = 5 + Math.random() * 50; // sat/vB
 
     blocks.push({
       height: startHeight + i,
@@ -31,10 +36,10 @@ const generateMockBlocks = (count: number, fillLevel: number = 0.5) => {
       timestamp: Date.now() - i * 600000, // 10 minutes apart
       transactions: txCount,
       size: baseSize,
-      weight: baseSize * 4,
-      fee: Math.round(feeBase),
-      minFee: Math.round(feeBase * 0.7),
-      maxFee: Math.round(feeBase * 1.5),
+      weight: weight,
+      fee: Math.round(feeRate), // sat/vB
+      minFee: Math.round(feeRate * 0.7),
+      maxFee: Math.round(feeRate * 1.5),
       isNew: i === 0, // Mark the latest block as new
     });
   }
@@ -92,7 +97,7 @@ const BlockchainDemo: React.FC = () => {
   const handleBlockClick = (block: any) => {
     console.log('🔍 Block clicked:', block);
     alert(
-      `Block ${block.block_height}\n${block.tx_count} transactions\nFee: ${block.total_fee} sat/vB\nSize: ${block.size} bytes`
+      `Block ${block.block_height}\n${block.tx_count} transactions\nFee: ${block.total_fee} sat/vB\nSize: ${block.size} bytes\nWeight: ${block.weight} WU`
     );
   };
 
@@ -166,6 +171,8 @@ const BlockchainDemo: React.FC = () => {
             blocks={blocks.map((block) => ({
               block_height: block.height,
               block_hash: block.hash,
+              hash: block.hash,
+              height: block.height,
               size: block.size,
               weight: block.weight,
               tx_count: block.transactions,
@@ -177,6 +184,7 @@ const BlockchainDemo: React.FC = () => {
               version: 1,
               bits: 0,
               nonce: 0,
+              isNew: block.isNew,
             }))}
             loading={isLoading}
             maxBlocksToShow={blockCount}
@@ -197,21 +205,30 @@ const BlockchainDemo: React.FC = () => {
                 ::after) to create a realistic 3D isometric effect
               </li>
               <li>
-                Block coloring is based on the block fill level, transitioning
-                from blue (low) to green (high)
+                Dynamic block coloring represents fill level using gradients,
+                with the colored portion representing percentage of max block
+                weight
               </li>
               <li>
-                CSS variables are used for responsive sizing and easy
-                customization
+                Precise calculations for the 3D effect: top face uses
+                skew(40deg) and side uses skewY(50deg) for accurate isometric
+                appearance
               </li>
               <li>
-                Connectors between blocks create a visual chain representation
+                Block dimensions use CSS variables with specific ratios: height
+                is 0.192 × width, side width is 0.16 × height
               </li>
-              <li>Time indicators show when blocks were mined</li>
-              <li>Hover effects and animations provide visual feedback</li>
               <li>
-                Block height is displayed below each block for easy
-                identification
+                Animations provide visual feedback for new blocks, state
+                changes, and smooth transitions between states
+              </li>
+              <li>
+                Fee range display shows the estimated min/max fee rates for each
+                block
+              </li>
+              <li>
+                Responsive design with adjusted proportions for different screen
+                sizes
               </li>
             </ul>
           </Typography>

@@ -1,5 +1,8 @@
 {
   "dependencies": {
     "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.16"
   }
 }
