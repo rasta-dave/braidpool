@@ -67,6 +67,8 @@ interface BlockchainBlocksProps {
 
 // Weight units constant (similar to mempool.space approach)
 const BLOCK_WEIGHT_UNITS = 4000000;
+const BLOCK_WIDTH = 170; // Width of block + margin
+const BLOCK_PADDING = 15; // Padding between blocks
 
 const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
   blocks,
@@ -80,6 +82,11 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollAnimationRef = useRef<number | null>(null);
   const blockchainRef = useRef<HTMLDivElement>(null);
+  const prevBlocksRef = useRef<BlockType[]>([]);
+  const [blockStyles, setBlockStyles] = useState<{
+    [key: string]: React.CSSProperties;
+  }>({});
+  const [initialRender, setInitialRender] = useState(true);
 
   // State for dragging and momentum
   const [isDragging, setIsDragging] = useState(false);
@@ -90,6 +97,44 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
   const [showRightIndicator, setShowRightIndicator] = useState(true);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 });
 
+  // Calculate block positions and styles
+  const calculateBlockStyles = useCallback(() => {
+    const newStyles: { [key: string]: React.CSSProperties } = {};
+
+    // Compare with previous blocks to detect new ones
+    const prevHashes = prevBlocksRef.current.map((b) => b.hash);
+
+    blocks.forEach((block, index) => {
+      const isNew =
+        newBlocks.includes(block.hash) || !prevHashes.includes(block.hash);
+      const leftPosition = index * BLOCK_WIDTH;
+
+      newStyles[block.hash] = {
+        left: `${leftPosition}px`,
+        opacity: 1,
+        transform: isNew && !initialRender ? 'scale(1.05)' : 'scale(1)',
+      };
+    });
+
+    // Add styles for blocks that were removed (to animate them out)
+    prevBlocksRef.current.forEach((prevBlock) => {
+      if (!blocks.find((b) => b.hash === prevBlock.hash)) {
+        newStyles[prevBlock.hash] = {
+          opacity: 0,
+          transform: 'translateY(50px) scale(0.8)',
+          left: '-200px',
+        };
+      }
+    });
+
+    setBlockStyles(newStyles);
+    prevBlocksRef.current = [...blocks];
+
+    if (initialRender) {
+      setInitialRender(false);
+    }
+  }, [blocks, newBlocks, initialRender]);
+
   // Calculate which blocks should be rendered (virtualization)
   const calculateVisibleBlocks = useCallback(() => {
     if (!containerRef.current) return;
@@ -98,14 +143,14 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     const scrollPosition = container.scrollLeft;
     const containerWidth = container.offsetWidth;
 
-    // Calculate block width including margins (approximate)
-    const blockWidth = 155; // Block size + margins
-
     // Calculate visible range with buffer for smooth scrolling
-    const startIndex = Math.max(0, Math.floor(scrollPosition / blockWidth) - 5);
+    const startIndex = Math.max(
+      0,
+      Math.floor(scrollPosition / BLOCK_WIDTH) - 5
+    );
     const endIndex = Math.min(
       blocks.length,
-      Math.ceil((scrollPosition + containerWidth) / blockWidth) + 5
+      Math.ceil((scrollPosition + containerWidth) / BLOCK_WIDTH) + 5
     );
 
     setVisibleRange({ start: startIndex, end: endIndex });
@@ -116,12 +161,13 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
       scrollPosition < container.scrollWidth - container.offsetWidth - 50
     );
 
-    console.log(
-      `🔄 Visible blocks: ${startIndex} - ${endIndex} (${
-        endIndex - startIndex
-      } blocks)`
-    );
+    console.log(`🔄 Visible blocks: ${startIndex} - ${endIndex}`);
   }, [blocks.length]);
+
+  // Update block styles when blocks change
+  useEffect(() => {
+    calculateBlockStyles();
+  }, [blocks, calculateBlockStyles]);
 
   // Throttle the visible blocks calculation to improve performance
   const throttledCalculateVisibleBlocks = useCallback(
@@ -153,7 +199,6 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
       speed: prev.speed * 0.97, // Slower decay for smoother scrolling
     }));
 
-    console.log(`📊 Momentum scrolling - speed: ${speed.toFixed(2)}`);
     scrollAnimationRef.current = requestAnimationFrame(applyMomentum);
   }, [momentum]);
 
@@ -170,8 +215,6 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
       cancelAnimationFrame(scrollAnimationRef.current);
       scrollAnimationRef.current = null;
     }
-
-    console.log(`🖱️ Mouse down at X: ${e.pageX}`);
   };
 
   const handleMouseMove = useCallback(
@@ -187,8 +230,6 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
         speed: walkX * 0.15, // Increased momentum impact
         timestamp: Date.now(),
       });
-
-      console.log(`🖱️ Mouse move - delta: ${walkX.toFixed(2)}`);
     },
     [isDragging, startX, scrollLeft]
   );
@@ -198,13 +239,14 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
 
     setIsDragging(false);
 
-    // Start momentum animation
-    if (Math.abs(momentum.speed) > 0.5) {
-      scrollAnimationRef.current = requestAnimationFrame(applyMomentum);
-    }
+    // Disable momentum scrolling completely
+    setMomentum({ speed: 0, timestamp: 0 });
 
-    console.log(`🖱️ Mouse up - final momentum: ${momentum.speed.toFixed(2)}`);
-  }, [isDragging, momentum.speed, applyMomentum]);
+    if (scrollAnimationRef.current) {
+      cancelAnimationFrame(scrollAnimationRef.current);
+      scrollAnimationRef.current = null;
+    }
+  }, [isDragging]);
 
   // Touch event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -219,8 +261,6 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
       cancelAnimationFrame(scrollAnimationRef.current);
       scrollAnimationRef.current = null;
     }
-
-    console.log(`📱 Touch start at X: ${e.touches[0].pageX}`);
   };
 
   const handleTouchMove = useCallback(
@@ -238,8 +278,6 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
         timestamp: Date.now(),
       });
 
-      console.log(`📱 Touch move - delta: ${walkX.toFixed(2)}`);
-
       // Prevent default to stop page scrolling
       e.preventDefault();
     },
@@ -251,13 +289,14 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
 
     setIsDragging(false);
 
-    // Start momentum animation
-    if (Math.abs(momentum.speed) > 0.5) {
-      scrollAnimationRef.current = requestAnimationFrame(applyMomentum);
-    }
+    // Disable momentum scrolling completely
+    setMomentum({ speed: 0, timestamp: 0 });
 
-    console.log(`📱 Touch end - final momentum: ${momentum.speed.toFixed(2)}`);
-  }, [isDragging, momentum.speed, applyMomentum]);
+    if (scrollAnimationRef.current) {
+      cancelAnimationFrame(scrollAnimationRef.current);
+      scrollAnimationRef.current = null;
+    }
+  }, [isDragging]);
 
   // Clean up event listeners and animation on unmount
   useEffect(() => {
@@ -330,97 +369,8 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     };
   }, [calculateVisibleBlocks]);
 
-  // Watch for blocks updates to recalculate visible range
-  useEffect(() => {
-    calculateVisibleBlocks();
-  }, [blocks, calculateVisibleBlocks]);
-
   // Only render blocks in the visible range (with buffer)
   const visibleBlocks = blocks.slice(visibleRange.start, visibleRange.end);
-
-  // Determine fill level based on weight relative to max weight units
-  const determineFillLevel = (
-    weight: number,
-    maxWeightUnits: number
-  ): number => {
-    const ratio = weight / maxWeightUnits;
-
-    if (ratio < 0.25) return 0; // low
-    if (ratio < 0.5) return 1; // medium
-    if (ratio < 0.75) return 2; // high
-    return 3; // full
-  };
-
-  // Get CSS class for block content based on fill level
-  const getBlockContentClass = (fillLevel: number): string => {
-    switch (fillLevel) {
-      case 0:
-        return 'block-fill-low';
-      case 1:
-        return 'block-fill-medium';
-      case 2:
-        return 'block-fill-high';
-      case 3:
-        return 'block-fill-full';
-      default:
-        return 'block-fill-low';
-    }
-  };
-
-  // Apply custom block style with dynamic gradient based on fill level
-  const getBlockContentStyle = (block: BlockData): React.CSSProperties => {
-    // Use repeating linear gradient to represent block contents visually
-    return {
-      background: `repeating-linear-gradient(
-        to bottom,
-        var(--block-secondary-color),
-        var(--block-secondary-color) ${block.greenBackgroundHeight}%,
-        var(--block-color-medium) ${Math.max(block.greenBackgroundHeight, 0)}%,
-        var(--block-color-high) 100%
-      )`,
-    };
-  };
-
-  // Get container class based on block state
-  const getBlockContainerClass = (block: BlockData): string => {
-    if (block.isNew) return 'block-container new-block';
-    if (block.hasChanged) return 'block-container changed-block';
-    return 'block-container';
-  };
-
-  // Format timestamp to human-readable time
-  const formatTimestamp = (timestamp: number): string => {
-    const date = new Date(timestamp * 1000);
-    return format(date, 'MMM d, yyyy HH:mm:ss');
-  };
-
-  // Format timestamp to relative time (e.g., "2 hours ago")
-  const formatRelativeTime = (timestamp: number): string => {
-    try {
-      const date = new Date(timestamp * 1000);
-      return formatDistance(date, new Date(), { addSuffix: true });
-    } catch (error) {
-      console.error('📊 Error formatting relative time:', error);
-      return 'unknown time';
-    }
-  };
-
-  // Format numbers with commas for readability
-  const formatNumber = (num: number): string => {
-    return num.toLocaleString();
-  };
-
-  // Format file size in KB or MB
-  const formatSize = (size: number): string => {
-    if (size < 1024) return `${size} B`;
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  // Format fee rate
-  const formatFeeRate = (fee: number, round: boolean = false): string => {
-    return round ? Math.round(fee).toString() : fee.toFixed(1);
-  };
 
   const handleBlockClick = (block: BlockData) => {
     console.log('🧱 Block clicked:', block.block_height, block.block_hash);
@@ -430,30 +380,24 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
 
   return (
     <div
-      className={`blockchain-container ${isDragging ? 'dragging' : ''} ${
-        momentum.speed !== 0 ? 'momentum' : ''
-      }`}
+      className={`blockchain-container ${isDragging ? 'dragging' : ''}`}
       ref={containerRef}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
     >
       <div className="blockchain" ref={blockchainRef}>
-        {visibleBlocks.map((block, idx) => {
-          const actualIndex = visibleRange.start + idx;
+        {blocks.map((block, idx) => {
           const isChanged = changedBlocks.includes(block.hash);
           const isNew = newBlocks.includes(block.hash);
-
-          console.log(
-            `📦 Rendering block #${block.height} (hash: ${block.hash.substring(
-              0,
-              8
-            )}...)`
-          );
+          const style = blockStyles[block.hash] || {
+            left: `${idx * BLOCK_WIDTH}px`,
+          };
 
           return (
             <div
-              key={`${block.hash}-${actualIndex}`}
+              key={`${block.hash}-${idx}`}
               className="block-container"
+              style={style}
             >
               <Block
                 block={block}

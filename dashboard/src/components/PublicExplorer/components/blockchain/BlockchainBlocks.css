@@ -32,7 +32,7 @@
   white-space: nowrap;
   padding: 20px 0;
   cursor: grab;
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
   -webkit-overflow-scrolling: touch;
   -ms-overflow-style: none; /* Hide scrollbar for IE and Edge */
   scrollbar-width: none; /* Hide scrollbar for Firefox */
@@ -67,19 +67,23 @@
 }
 
 .blockchain {
-  display: inline-flex;
+  display: block;
   padding: 0 20px;
   min-height: 210px; /* Increased to accommodate the 3D effect */
+  position: relative;
+  height: 210px;
+  width: 2000px; /* Set a large width for the chain */
 }
 
 .block-container {
-  position: relative;
-  display: inline-flex;
+  position: absolute;
+  display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 0 10px;
-  transition: transform 0.2s;
+  margin: 0;
+  transition: transform 1s ease, left 1s ease, opacity 1s ease, background 2s;
   perspective: 800px;
+  top: 0;
 }
 
 .block-container:hover {
