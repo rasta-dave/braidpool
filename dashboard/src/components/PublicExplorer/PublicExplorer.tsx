@@ -197,6 +197,11 @@ const PublicExplorer: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const blockUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [newBlocks, setNewBlocks] = useState<string[]>([]);
+
+  // Function declarations to solve circular reference
+  const simulateNewBlockRef = useRef<(() => void) | null>(null);
+  const scheduleNextBlockUpdateRef = useRef<(() => void) | null>(null);
 
   const memoizedBlocks = useMemo(() => blocks, [blocks]);
 
@@ -456,54 +461,8 @@ const PublicExplorer: React.FC = () => {
     window.location.href = '/';
   };
 
-  // Function to simulate receiving a new block
-  const simulateNewBlock = useCallback(() => {
-    console.log('🔄 Simulating new block arrival...');
-
-    fetch('http://localhost:3100/blocks')
-      .then((response) => {
-        if (!response.ok) throw new Error('Failed to fetch blocks');
-        return response.json();
-      })
-      .then((blocksData) => {
-        if (blocksData.length === 0) return;
-
-        // Take only the most recent blocks (up to displayBlockCount)
-        const limitedBlocks = blocksData.slice(0, displayBlockCount);
-
-        // Add random size and weight to blocks
-        const enhancedBlocks = limitedBlocks.map((block: BlockData) => ({
-          ...block,
-          size: Math.floor(Math.random() * 1000) + 1000,
-          weight: Math.floor(Math.random() * 1000) + 3000,
-        }));
-
-        // Compare with previous blocks to highlight changes
-        const diffedBlocks = compareBlocks(
-          enhancedBlocks,
-          prevBlocksRef.current
-        );
-
-        console.log(
-          '📦 New block data received:',
-          diffedBlocks.length > 0 ? diffedBlocks[0].hash : 'No blocks'
-        );
-
-        setBlocks(diffedBlocks);
-        prevBlocksRef.current = enhancedBlocks;
-
-        // Schedule next block update with randomized timing
-        scheduleNextBlockUpdate();
-      })
-      .catch((err) => {
-        console.error('❌ Error fetching new block:', err);
-        // Even on error, schedule next attempt
-        scheduleNextBlockUpdate();
-      });
-  }, [displayBlockCount]);
-
   // Schedule the next block update with realistic timing
-  const scheduleNextBlockUpdate = useCallback(() => {
+  scheduleNextBlockUpdateRef.current = () => {
     // Clear any existing timeout
     if (blockUpdateTimeoutRef.current) {
       clearTimeout(blockUpdateTimeoutRef.current);
@@ -521,9 +480,154 @@ const PublicExplorer: React.FC = () => {
     );
 
     blockUpdateTimeoutRef.current = setTimeout(() => {
-      simulateNewBlock();
+      if (simulateNewBlockRef.current) {
+        simulateNewBlockRef.current();
+      }
     }, nextUpdateTime);
-  }, [simulateNewBlock]);
+  };
+
+  // Updated function to handle newly detected blocks
+  const handleNewBlockDetected = useCallback((newBlockHash: string) => {
+    console.log(`🎯 New block detected: ${newBlockHash}`);
+
+    // Add to new blocks list
+    setNewBlocks((currentNewBlocks) => [...currentNewBlocks, newBlockHash]);
+
+    // Remove from new blocks list after 5 seconds
+    setTimeout(() => {
+      setNewBlocks((currentNew) =>
+        currentNew.filter((hash) => hash !== newBlockHash)
+      );
+    }, 5000);
+
+    // Update network stats to reflect new block
+    setNetworkStats((prev) => ({
+      ...prev,
+      totalBlocks: prev.totalBlocks + 1,
+      changed: ['totalBlocks'],
+    }));
+
+    // Refresh the blocks displayed
+    fetch('http://localhost:3100/stats')
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to fetch network stats');
+        return response.json();
+      })
+      .then((statsData) => {
+        console.log('✅ Network stats updated after new block');
+
+        // Compare with previous stats to highlight changes
+        const diffedStats = compareNetworkStats(
+          statsData,
+          prevStatsRef.current
+        );
+        setNetworkStats(diffedStats);
+        prevStatsRef.current = statsData;
+      })
+      .catch((err) => {
+        console.error('❌ Error updating stats after new block:', err);
+      });
+  }, []);
+
+  // Function to simulate receiving a new block
+  simulateNewBlockRef.current = () => {
+    console.log('🔄 Simulating new block arrival...');
+
+    fetch('http://localhost:3100/blocks')
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to fetch blocks');
+        return response.json();
+      })
+      .then((blocksData) => {
+        if (blocksData.length === 0) return;
+
+        // Increment display count to show one more block when a new one arrives
+        // but keep it reasonable (not more than 20)
+        setDisplayBlockCount((prev) => Math.min(prev + 1, 20));
+
+        console.log(
+          `🔢 Block display count increased to: ${
+            displayBlockCount + 1
+          } (max 20)`
+        );
+
+        // Take blocks up to the new displayBlockCount
+        const limitedBlocks = blocksData.slice(0, displayBlockCount + 1);
+
+        // Get highest block from current blocks
+        const highestCurrentBlock =
+          blocks.length > 0 ? Math.max(...blocks.map((b) => b.height)) : 0;
+
+        // Check if there's a new block with higher height
+        const hasNewBlock = blocksData.some(
+          (b: any) => b.height > highestCurrentBlock
+        );
+
+        console.log(`🔍 Highest current block: ${highestCurrentBlock}`);
+        console.log(`🔍 New blocks detected: ${hasNewBlock}`);
+
+        // Add random size and weight to blocks
+        const enhancedBlocks = limitedBlocks.map((block: BlockData) => ({
+          ...block,
+          size: Math.floor(Math.random() * 1000) + 1000,
+          weight: Math.floor(Math.random() * 1000) + 3000,
+        }));
+
+        // Mark new blocks in the chain
+        const newBlockHashes = enhancedBlocks
+          .filter((b: BlockData) => b.height > highestCurrentBlock)
+          .map((b: BlockData) => b.hash);
+
+        if (newBlockHashes.length > 0) {
+          console.log(`🆕 New blocks added: ${newBlockHashes.length}`);
+          console.log(`🆕 New block hashes: ${newBlockHashes.join(', ')}`);
+
+          // For each new block, update stats and manage highlights
+          newBlockHashes.forEach((hash: string) =>
+            handleNewBlockDetected(hash)
+          );
+        }
+
+        // Compare with previous blocks to highlight changes
+        const diffedBlocks = compareBlocks(
+          enhancedBlocks,
+          prevBlocksRef.current
+        );
+
+        console.log(
+          '📦 New block data received:',
+          diffedBlocks.length > 0 ? diffedBlocks[0].hash : 'No blocks'
+        );
+
+        setBlocks(diffedBlocks);
+        prevBlocksRef.current = enhancedBlocks;
+
+        // Schedule next block update with randomized timing
+        if (scheduleNextBlockUpdateRef.current) {
+          scheduleNextBlockUpdateRef.current();
+        }
+      })
+      .catch((err) => {
+        console.error('❌ Error fetching new block:', err);
+        // Even on error, schedule next attempt
+        if (scheduleNextBlockUpdateRef.current) {
+          scheduleNextBlockUpdateRef.current();
+        }
+      });
+  };
+
+  // Expose simplified functions for use in useEffect
+  const simulateNewBlock = useCallback(() => {
+    if (simulateNewBlockRef.current) {
+      simulateNewBlockRef.current();
+    }
+  }, []);
+
+  const scheduleNextBlockUpdate = useCallback(() => {
+    if (scheduleNextBlockUpdateRef.current) {
+      scheduleNextBlockUpdateRef.current();
+    }
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -739,6 +843,7 @@ const PublicExplorer: React.FC = () => {
                 isFetchingData={isFetchingData}
                 blocks={blocks}
                 formatDate={formatDate}
+                newBlocks={newBlocks}
               />
             </Box>
           }
@@ -765,6 +870,7 @@ const ExplorerMainView: React.FC<{
   isFetchingData: boolean;
   blocks: any[];
   formatDate: (timestamp: number) => string;
+  newBlocks: string[];
 }> = ({
   selectedBlock,
   handleBackToExplorer,
@@ -781,6 +887,7 @@ const ExplorerMainView: React.FC<{
   isFetchingData,
   blocks,
   formatDate,
+  newBlocks,
 }) => {
   return (
     <Box>
@@ -921,6 +1028,7 @@ const ExplorerMainView: React.FC<{
                 loading={initialLoad}
                 maxBlocksToShow={displayBlockCount}
                 onBlockSelected={(block) => handleBlockClick(block.block_hash)}
+                newBlocks={newBlocks}
               />
             </CardContent>
           </Card>
