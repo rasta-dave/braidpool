@@ -432,7 +432,6 @@ const PublicExplorer: React.FC = () => {
   };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
     const fetchData = async () => {
       try {
         // Skip data fetching if user is viewing block details
@@ -511,24 +510,13 @@ const PublicExplorer: React.FC = () => {
       }
     };
 
-    // Initial data fetch
+    // Fetch data once when the component mounts or when selectedBlock changes
     fetchData();
 
-    // Set up the interval, but clear it when viewing block details
-    if (!selectedBlock) {
-      console.log('🔄 Setting up data refresh interval (every 10s)');
-      interval = setInterval(fetchData, 10000); // Refresh every 10 seconds
-    } else {
-      console.log('⏸️ Pausing data refresh while viewing block details');
-    }
+    // No interval setup - data only refreshes on component mount or when dependencies change
 
-    return () => {
-      if (interval) {
-        console.log('🛑 Clearing data refresh interval');
-        clearInterval(interval);
-      }
-    };
-  }, [selectedBlock]); // Add selectedBlock to dependency array to pause/resume interval
+    // No cleanup needed since we're not setting up any intervals
+  }, [selectedBlock]); // Keep selectedBlock in dependency array for conditional fetching
 
   // Skeleton loading screen for initial load
   if (loading) {
