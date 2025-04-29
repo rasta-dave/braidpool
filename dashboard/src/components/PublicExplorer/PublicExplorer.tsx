@@ -32,6 +32,7 @@ import {
 } from 'recharts';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import HomeIcon from '@mui/icons-material/Home';
 import './PublicExplorer.css';
 import BlockDetail, { Block } from './components/blocks/BlockDetail';
 import TransactionRoutes from './components/transactions/TransactionRoutes';
@@ -424,6 +425,12 @@ const PublicExplorer: React.FC = () => {
     );
   };
 
+  // Function to navigate back to dashboard
+  const handleBackToDashboard = () => {
+    console.log('🏠 Navigating back to dashboard');
+    navigate('/', { replace: true });
+  };
+
   useEffect(() => {
     let interval: NodeJS.Timeout;
     const fetchData = async () => {
@@ -607,23 +614,42 @@ const PublicExplorer: React.FC = () => {
         <Route
           path="*"
           element={
-            <ExplorerMainView
-              selectedBlock={selectedBlock}
-              handleBackToExplorer={handleBackToExplorer}
-              blockDetailLoading={blockDetailLoading}
-              blockDetailError={blockDetailError}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              handleSearch={handleSearch}
-              networkStats={networkStats}
-              initialLoad={initialLoad}
-              memoizedBlocks={memoizedBlocks}
-              displayBlockCount={displayBlockCount}
-              handleBlockClick={handleBlockClick}
-              isFetchingData={isFetchingData}
-              blocks={blocks}
-              formatDate={formatDate}
-            />
+            <Box>
+              {/* Dashboard navigation button */}
+              <Box
+                sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}
+              >
+                <Typography variant="h4" gutterBottom>
+                  Braidpool Explorer
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<HomeIcon />}
+                  onClick={handleBackToDashboard}
+                  sx={{ height: 'fit-content' }}
+                >
+                  BACK TO DASHBOARD
+                </Button>
+              </Box>
+
+              <ExplorerMainView
+                selectedBlock={selectedBlock}
+                handleBackToExplorer={handleBackToExplorer}
+                blockDetailLoading={blockDetailLoading}
+                blockDetailError={blockDetailError}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                handleSearch={handleSearch}
+                networkStats={networkStats}
+                initialLoad={initialLoad}
+                memoizedBlocks={memoizedBlocks}
+                displayBlockCount={displayBlockCount}
+                handleBlockClick={handleBlockClick}
+                isFetchingData={isFetchingData}
+                blocks={blocks}
+                formatDate={formatDate}
+              />
+            </Box>
           }
         />
       </Routes>
@@ -689,11 +715,7 @@ const ExplorerMainView: React.FC<{
               Block #{selectedBlock.height}
             </Typography>
           </Breadcrumbs>
-        ) : (
-          <Typography variant="h4" gutterBottom>
-            Braidpool Explorer
-          </Typography>
-        )}
+        ) : null}
       </Box>
 
       {/* Rest of existing explorer UI */}

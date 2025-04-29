@@ -15,8 +15,10 @@ import {
   Tooltip,
   Link,
   Button,
+  ButtonGroup,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import HomeIcon from '@mui/icons-material/Home';
 import {
   formatTimestamp,
   formatBtcValue,
@@ -39,6 +41,11 @@ const TransactionDetails: React.FC = () => {
   const handleBackToExplorer = () => {
     console.log('🔙 Navigating back to explorer from tx details');
     navigate('/explorer');
+  };
+
+  const handleBackToDashboard = () => {
+    console.log('🏠 Navigating back to dashboard from tx details');
+    navigate('/', { replace: true });
   };
 
   useEffect(() => {
@@ -172,14 +179,16 @@ const TransactionDetails: React.FC = () => {
 
   return (
     <Box>
-      <Button
-        startIcon={<ArrowBackIcon />}
-        onClick={handleBackToExplorer}
-        variant="outlined"
-        sx={{ mb: 2 }}
-      >
-        Back to Explorer
-      </Button>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <ButtonGroup variant="outlined">
+          <Button startIcon={<ArrowBackIcon />} onClick={handleBackToExplorer}>
+            Back to Explorer
+          </Button>
+          <Button startIcon={<HomeIcon />} onClick={handleBackToDashboard}>
+            Back to Dashboard
+          </Button>
+        </ButtonGroup>
+      </Box>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>

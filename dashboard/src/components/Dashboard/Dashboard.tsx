@@ -9,6 +9,7 @@ import {
   ListItemText,
   Typography,
 } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import colors from '../../theme/colors';
 
 // Icons
@@ -51,6 +52,7 @@ enum Page {
 }
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [_data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +88,12 @@ const Dashboard = () => {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  // Update the PublicExplorer button to navigate instead of changing page
+  const handlePublicExplorerClick = () => {
+    console.log('📊 Navigating to Public Explorer');
+    navigate('/explorer');
   };
 
   // Sidebar drawer content
@@ -300,7 +308,7 @@ const Dashboard = () => {
         </ListItemButton>
 
         <ListItemButton
-          onClick={() => setCurrentPage(Page.PUBLIC_EXPLORER)}
+          onClick={handlePublicExplorerClick}
           selected={currentPage === Page.PUBLIC_EXPLORER}
           sx={{
             pl: 2,
@@ -393,7 +401,8 @@ const Dashboard = () => {
       case Page.MINER_STATS:
         return <MinedSharesExplorer />;
       case Page.PUBLIC_EXPLORER:
-        return <PublicExplorer />;
+        navigate('/explorer');
+        return null;
     }
   };
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, Container, Link, Typography, Button } from '@mui/material';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './components/Dashboard/Dashboard';
 import ShareDetails from './components/ShareDetails/ShareDetails';
 import MinedSharesExplorer from './components/MinerDashboard/MinerDashboard';
@@ -91,11 +91,14 @@ function App() {
             }}
           >
             <Routes>
+              {/* Main dashboard routes */}
               <Route path="/" element={<Dashboard />} />
               <Route
                 path="/minedsharesexplorer"
                 element={<MinedSharesExplorer />}
               />
+
+              {/* Explorer routes */}
               <Route path="/explorer/*" element={<PublicExplorer />} />
               <Route
                 path="/tx/:txid"
@@ -105,24 +108,36 @@ function App() {
                   </Box>
                 }
               />
+
+              {/* Catch-all redirect to dashboard */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-            <Box
-              component="footer"
-              sx={{
-                py: 3,
-                mt: 'auto',
-                bgcolor: 'background.paper',
-                borderTop: '1px solid rgba(255,255,255,0.05)',
-              }}
-            >
-              <Container maxWidth="lg">
-                <Typography variant="body1" align="center" gutterBottom>
-                  A visualization dashboard for the Braidpool decentralized
-                  mining pool
-                </Typography>
-                <Copyright />
-              </Container>
-            </Box>
+
+            {/* Footer only appears on dashboard routes */}
+            <Routes>
+              <Route
+                path="/"
+                element={
+                  <Box
+                    component="footer"
+                    sx={{
+                      py: 3,
+                      mt: 'auto',
+                      bgcolor: 'background.paper',
+                      borderTop: '1px solid rgba(255,255,255,0.05)',
+                    }}
+                  >
+                    <Container maxWidth="lg">
+                      <Typography variant="body1" align="center" gutterBottom>
+                        A visualization dashboard for the Braidpool
+                        decentralized mining pool
+                      </Typography>
+                      <Copyright />
+                    </Container>
+                  </Box>
+                }
+              />
+            </Routes>
           </Box>
         </Box>
       </BrowserRouter>
