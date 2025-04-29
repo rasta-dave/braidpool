@@ -1,4 +1,10 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useRef,
+  useMemo,
+  useCallback,
+} from 'react';
 import {
   Card,
   CardContent,
@@ -190,6 +196,7 @@ const PublicExplorer: React.FC = () => {
   const [blockDetailError, setBlockDetailError] = useState<string | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const blockUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const memoizedBlocks = useMemo(() => blocks, [blocks]);
 
@@ -252,11 +259,25 @@ const PublicExplorer: React.FC = () => {
     const oldBlocksMap = new Map<string, BlockData>();
     oldBlocks.forEach((block) => oldBlocksMap.set(block.hash, block));
 
+    // Get the highest block height from old blocks to detect new blocks
+    const highestOldBlockHeight =
+      oldBlocks.length > 0
+        ? Math.max(...oldBlocks.map((block) => block.height))
+        : 0;
+
+    console.log(
+      `🔍 Comparing blocks: ${newBlocks.length} new vs ${oldBlocks.length} old`
+    );
+    console.log(`🔍 Highest old block height: ${highestOldBlockHeight}`);
+
     return newBlocks.map((block) => {
       const oldBlock = oldBlocksMap.get(block.hash);
 
-      // If block is new
-      if (!oldBlock) {
+      // If block is new (either by hash or if height is greater than previous max)
+      if (!oldBlock || block.height > highestOldBlockHeight) {
+        console.log(
+          `🆕 New block detected: ${block.hash} at height ${block.height}`
+        );
         return { ...block, isNew: true };
       }
 
@@ -267,6 +288,10 @@ const PublicExplorer: React.FC = () => {
         changedFields.push('transactions');
       if (block.difficulty !== oldBlock.difficulty)
         changedFields.push('difficulty');
+
+      if (changedFields.length > 0) {
+        console.log(`📝 Changed block detected: ${block.hash}`, changedFields);
+      }
 
       return {
         ...block,
@@ -428,8 +453,77 @@ const PublicExplorer: React.FC = () => {
   // Function to navigate back to dashboard
   const handleBackToDashboard = () => {
     console.log('🏠 Navigating back to dashboard');
-    navigate('/', { replace: true });
+    window.location.href = '/';
   };
+
+  // Function to simulate receiving a new block
+  const simulateNewBlock = useCallback(() => {
+    console.log('🔄 Simulating new block arrival...');
+
+    fetch('http://localhost:3100/blocks')
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to fetch blocks');
+        return response.json();
+      })
+      .then((blocksData) => {
+        if (blocksData.length === 0) return;
+
+        // Take only the most recent blocks (up to displayBlockCount)
+        const limitedBlocks = blocksData.slice(0, displayBlockCount);
+
+        // Add random size and weight to blocks
+        const enhancedBlocks = limitedBlocks.map((block: BlockData) => ({
+          ...block,
+          size: Math.floor(Math.random() * 1000) + 1000,
+          weight: Math.floor(Math.random() * 1000) + 3000,
+        }));
+
+        // Compare with previous blocks to highlight changes
+        const diffedBlocks = compareBlocks(
+          enhancedBlocks,
+          prevBlocksRef.current
+        );
+
+        console.log(
+          '📦 New block data received:',
+          diffedBlocks.length > 0 ? diffedBlocks[0].hash : 'No blocks'
+        );
+
+        setBlocks(diffedBlocks);
+        prevBlocksRef.current = enhancedBlocks;
+
+        // Schedule next block update with randomized timing
+        scheduleNextBlockUpdate();
+      })
+      .catch((err) => {
+        console.error('❌ Error fetching new block:', err);
+        // Even on error, schedule next attempt
+        scheduleNextBlockUpdate();
+      });
+  }, [displayBlockCount]);
+
+  // Schedule the next block update with realistic timing
+  const scheduleNextBlockUpdate = useCallback(() => {
+    // Clear any existing timeout
+    if (blockUpdateTimeoutRef.current) {
+      clearTimeout(blockUpdateTimeoutRef.current);
+    }
+
+    // For demo purposes: random time between 10-30 seconds
+    // In production this would be closer to Bitcoin's 10 min average
+    const minTime = 10000; // 10 seconds
+    const maxTime = 30000; // 30 seconds
+    const nextUpdateTime =
+      Math.floor(Math.random() * (maxTime - minTime + 1)) + minTime;
+
+    console.log(
+      `⏱️ Next block update in ${(nextUpdateTime / 1000).toFixed(1)} seconds`
+    );
+
+    blockUpdateTimeoutRef.current = setTimeout(() => {
+      simulateNewBlock();
+    }, nextUpdateTime);
+  }, [simulateNewBlock]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -457,8 +551,11 @@ const PublicExplorer: React.FC = () => {
         const blocksData = await blocksResponse.json();
         console.log('✅ Blocks fetched successfully:', blocksData.length);
 
+        // Take only the most recent blocks (up to displayBlockCount)
+        const limitedBlocks = blocksData.slice(0, displayBlockCount);
+
         // Add random size and weight to blocks
-        const enhancedBlocks = blocksData.map((block: BlockData) => ({
+        const enhancedBlocks = limitedBlocks.map((block: BlockData) => ({
           ...block,
           size: Math.floor(Math.random() * 1000) + 1000,
           weight: Math.floor(Math.random() * 1000) + 3000,
@@ -496,6 +593,9 @@ const PublicExplorer: React.FC = () => {
 
         if (initialLoad) {
           setInitialLoad(false);
+
+          // Start the block update simulation after initial load
+          scheduleNextBlockUpdate();
         }
       } catch (err) {
         console.error('❌ Error fetching data:', err);
@@ -513,10 +613,13 @@ const PublicExplorer: React.FC = () => {
     // Fetch data once when the component mounts or when selectedBlock changes
     fetchData();
 
-    // No interval setup - data only refreshes on component mount or when dependencies change
-
-    // No cleanup needed since we're not setting up any intervals
-  }, [selectedBlock]); // Keep selectedBlock in dependency array for conditional fetching
+    // Clean up timeouts when component unmounts
+    return () => {
+      if (blockUpdateTimeoutRef.current) {
+        clearTimeout(blockUpdateTimeoutRef.current);
+      }
+    };
+  }, [selectedBlock, displayBlockCount, scheduleNextBlockUpdate]);
 
   // Skeleton loading screen for initial load
   if (loading) {

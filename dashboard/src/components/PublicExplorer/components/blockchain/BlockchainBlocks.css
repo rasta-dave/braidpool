@@ -410,3 +410,79 @@
     font-size: 9px;
   }
 }
+
+/* New and changed block styles */
+.new-block {
+  z-index: 10;
+  filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.7));
+}
+
+.changed-block {
+  z-index: 5;
+  filter: drop-shadow(0 0 5px rgba(30, 144, 255, 0.5));
+}
+
+/* Click animation */
+.block-container.clicked {
+  transform: scale(0.95) !important;
+  transition: transform 0.1s ease-out !important;
+}
+
+/* New block indicator */
+.new-block-indicator {
+  position: absolute;
+  top: -20px;
+  right: -10px;
+  background-color: #ff9800;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 8px;
+  animation: bounce 1s ease infinite;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+  z-index: 20;
+  pointer-events: none;
+}
+
+/* Animations */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(255, 215, 0, 0);
+    transform: scale(1.1);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .blockchain-container {
+    height: 200px;
+  }
+
+  .blockchain {
+    height: 160px;
+  }
+
+  .new-block-indicator {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+}

@@ -118,6 +118,11 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
         left: `${leftPosition}px`,
         opacity: 1,
         transform: isNew && !initialRender ? 'scale(1.05)' : 'scale(1)',
+        transition:
+          isNew && !initialRender
+            ? 'transform 0.5s ease-out, opacity 0.5s ease-out, box-shadow 0.5s ease-out'
+            : 'transform 0.3s ease, opacity 0.3s ease',
+        animation: isNew && !initialRender ? 'pulse 2s ease-out' : 'none',
       };
     });
 
@@ -128,6 +133,7 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
           opacity: 0,
           transform: 'translateY(50px) scale(0.8)',
           left: '-200px',
+          transition: 'all 0.5s ease-out',
         };
       }
     });
@@ -138,7 +144,27 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     if (initialRender) {
       setInitialRender(false);
     }
+
+    // If new blocks arrived, scroll to show them
+    if (blocks.length > 0 && prevBlocksRef.current.length > 0) {
+      const hasNewBlocks = blocks.some(
+        (block) =>
+          newBlocks.includes(block.hash) || !prevHashes.includes(block.hash)
+      );
+
+      if (hasNewBlocks && containerRef.current) {
+        // Scroll to beginning to show newest blocks
+        containerRef.current.scrollLeft = 0;
+        console.log('🔄 New blocks detected - scrolling to show them');
+      }
+    }
   }, [blocks, newBlocks, initialRender]);
+
+  // Memoize the calculateBlockStyles function to prevent recreation on each render
+  const memoizedCalculateBlockStyles = useCallback(calculateBlockStyles, [
+    blocks,
+    newBlocks,
+  ]);
 
   // Calculate which blocks should be rendered (virtualization)
   const calculateVisibleBlocks = useCallback(() => {
@@ -171,8 +197,11 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
 
   // Update block styles when blocks change
   useEffect(() => {
-    calculateBlockStyles();
-  }, [blocks, calculateBlockStyles]);
+    // Only calculate styles when needed to prevent infinite loop
+    if (blocks.length > 0 || initialRender) {
+      memoizedCalculateBlockStyles();
+    }
+  }, [blocks.length, initialRender, memoizedCalculateBlockStyles]);
 
   // Throttle the visible blocks calculation to improve performance
   const throttledCalculateVisibleBlocks = useCallback(
@@ -303,7 +332,7 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     }
   }, [isDragging]);
 
-  // Clean up event listeners and animation on unmount
+  // Set up scroll event listeners
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -361,28 +390,41 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
     };
   }, [isDragging, handleTouchMove, handleTouchEnd]);
 
-  // Recalculate when container size changes
+  // Set up window resize event listeners
   useEffect(() => {
     const handleResize = () => {
-      calculateBlockStyles();
+      memoizedCalculateBlockStyles();
       calculateVisibleBlocks();
     };
 
     window.addEventListener('resize', handleResize);
 
-    // Initial calculation
-    handleResize();
-
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [calculateBlockStyles, calculateVisibleBlocks]);
+  }, [memoizedCalculateBlockStyles, calculateVisibleBlocks]);
 
   // Only render blocks in the visible range (with buffer)
   const visibleBlocks = blocks.slice(visibleRange.start, visibleRange.end);
 
+  // Handle block click with animation
   const handleBlockClick = (block: BlockData) => {
     console.log('🧱 Block clicked:', block.block_height, block.block_hash);
+
+    // Add visual feedback when block is clicked
+    if (blockchainRef.current) {
+      const blockElements =
+        blockchainRef.current.querySelectorAll('.block-container');
+      blockElements.forEach((el) => {
+        if (el.getAttribute('data-hash') === block.block_hash) {
+          el.classList.add('clicked');
+          setTimeout(() => {
+            el.classList.remove('clicked');
+          }, 300);
+        }
+      });
+    }
+
     if (onBlockSelect) onBlockSelect(block as unknown as BlockType);
     if (onBlockSelected) onBlockSelected(block);
   };
@@ -405,8 +447,11 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
           return (
             <div
               key={`${block.hash}-${idx}`}
-              className="block-container"
+              className={`block-container ${isNew ? 'new-block' : ''} ${
+                isChanged ? 'changed-block' : ''
+              }`}
               style={style}
+              data-hash={block.hash}
             >
               <Block
                 block={block}
@@ -415,6 +460,9 @@ const BlockchainBlocks: React.FC<BlockchainBlocksProps> = ({
                 new={isNew}
                 loading={loading && isNew}
               />
+              {isNew && !initialRender && (
+                <div className="new-block-indicator">NEW</div>
+              )}
             </div>
           );
         })}
