@@ -32,63 +32,33 @@ const TransactionDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  console.log('⚡ TransactionDetails component rendering');
+  console.log('⚡ txid from params:', txid);
+  console.log('⚡ current location:', location.pathname);
+
   const handleBackToExplorer = () => {
-    // Navigate back to the explorer root
-    navigate('/');
-
-    // If using hash routing
-    if (window.location.hash) {
-      window.location.hash = '#/explorer';
-    }
-
-    console.log('🔙 Navigating back to explorer');
+    console.log('🔙 Navigating back to explorer from tx details');
+    navigate('/explorer');
   };
 
   useEffect(() => {
     const fetchTransaction = async () => {
-      // Extract txid from multiple possible URL formats
       let transactionId = txid;
+      console.log('🔍 Transaction ID from params:', transactionId);
 
-      console.log('🔍 Attempting to extract transaction ID');
-      console.log('📋 URL params txid:', txid);
-      console.log('📋 Current location:', location);
-
-      // Try to extract from pathname
-      if (!transactionId && location.pathname.includes('/tx/')) {
-        transactionId = location.pathname.split('/tx/')[1];
+      if (!transactionId) {
+        // If we don't have the ID from params, try to extract from pathname
+        const pathParts = location.pathname.split('/');
+        transactionId = pathParts[pathParts.length - 1];
         console.log('📋 Extracted from pathname:', transactionId);
       }
 
-      // Try to extract from hash
-      if (!transactionId && location.hash) {
-        const hashParts = location.hash.split('/tx/');
-        if (hashParts.length > 1) {
-          transactionId = hashParts[1];
-          console.log('📋 Extracted from hash:', transactionId);
-        }
-      }
-
-      // If hash contains an explorer pattern
-      if (
-        !transactionId &&
-        location.hash &&
-        location.hash.includes('/explorer/tx/')
-      ) {
-        const hashParts = location.hash.split('/explorer/tx/');
-        if (hashParts.length > 1) {
-          transactionId = hashParts[1];
-          console.log('📋 Extracted from explorer hash:', transactionId);
-        }
-      }
-
       if (!transactionId) {
-        console.error('❌ Transaction ID not found in URL:', location);
+        console.error('❌ Transaction ID not found in URL');
         setError('Transaction ID not found in URL');
         setLoading(false);
         return;
       }
-
-      console.log('🎯 Final transaction ID for fetching:', transactionId);
 
       try {
         console.log('🔄 Fetching transaction details for:', transactionId);
@@ -115,6 +85,7 @@ const TransactionDetails: React.FC = () => {
     return (
       <Box display="flex" justifyContent="center" m={3}>
         <CircularProgress />
+        <Typography ml={2}>Loading transaction details...</Typography>
       </Box>
     );
   }

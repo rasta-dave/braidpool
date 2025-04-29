@@ -62,7 +62,7 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                     <TableCell>
                       <Typography
                         component={Link}
-                        to={`#/explorer/tx/${tx.txid}`}
+                        to={`/tx/${tx.txid}`}
                         sx={{
                           color: 'primary.main',
                           textDecoration: 'none',

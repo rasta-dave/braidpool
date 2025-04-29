@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Dashboard from './components/Dashboard/Dashboard';
 import ShareDetails from './components/ShareDetails/ShareDetails';
 import MinedSharesExplorer from './components/MinerDashboard/MinerDashboard';
+import PublicExplorer from './components/PublicExplorer/PublicExplorer';
+import TransactionDetails from './components/PublicExplorer/components/transactions/TransactionDetails';
 
 // Create a dark theme
 const theme = createTheme({
@@ -94,7 +96,15 @@ function App() {
                 path="/minedsharesexplorer"
                 element={<MinedSharesExplorer />}
               />
-              {/* Add more routes as needed */}
+              <Route path="/explorer/*" element={<PublicExplorer />} />
+              <Route
+                path="/tx/:txid"
+                element={
+                  <Box sx={{ p: 3 }}>
+                    <TransactionDetails />
+                  </Box>
+                }
+              />
             </Routes>
             <Box
               component="footer"

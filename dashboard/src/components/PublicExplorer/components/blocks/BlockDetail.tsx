@@ -30,6 +30,7 @@ import {
 import BlockTransactions from './BlockTransactions';
 import { BraidTransaction } from '../transactions/BraidTransaction';
 import { formatDistanceToNow } from 'date-fns';
+import { Link as RouterLink } from 'react-router-dom';
 
 export interface Transaction {
   txid: string;
@@ -254,7 +255,18 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
           <TableBody>
             {block.transactions.map((tx) => (
               <TableRow key={tx.txid} hover>
-                <TableCell sx={{ wordBreak: 'break-all' }}>{tx.txid}</TableCell>
+                <TableCell sx={{ wordBreak: 'break-all' }}>
+                  <RouterLink
+                    to={`/tx/${tx.txid}`}
+                    style={{
+                      color: '#1976d2',
+                      textDecoration: 'none',
+                      fontFamily: 'monospace',
+                    }}
+                  >
+                    {tx.txid}
+                  </RouterLink>
+                </TableCell>
                 <TableCell align="right">{formatSize(tx.size)}</TableCell>
                 <TableCell align="right">
                   {(tx.weight / 1000).toFixed(2)} kWU
