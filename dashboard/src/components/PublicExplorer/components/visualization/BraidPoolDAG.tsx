@@ -723,38 +723,6 @@ const BraidPoolDAG: React.FC = () => {
   return (
     <div>
       <div
-        style={{
-          margin: '5px',
-          position: 'relative',
-          display: 'flex',
-          gap: '10px',
-          alignItems: 'center',
-        }}
-      >
-        <select
-          value={selectedCohorts}
-          onChange={(e) => {
-            const value = e.target.value;
-            setSelectedCohorts(value === 'all' ? 'all' : Number(value));
-          }}
-          style={{
-            padding: '5px',
-            borderRadius: '4px',
-            border: '1px solid #0077B6',
-            backgroundColor: 'white',
-            color: '#0077B6',
-          }}
-        >
-          <option value="all">Show all cohorts</option>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
-            <option key={value} value={value}>
-              Show latest {value} cohorts
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div
         ref={containerRef}
         style={{
           position: 'relative',
@@ -774,6 +742,8 @@ const BraidPoolDAG: React.FC = () => {
           setPaused={setPaused}
           animationSpeed={animationSpeed}
           setAnimationSpeed={setAnimationSpeed}
+          selectedCohorts={selectedCohorts}
+          setSelectedCohorts={setSelectedCohorts}
         />
 
         <Card

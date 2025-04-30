@@ -11,6 +11,8 @@ interface BraidPoolDAGControlsProps {
   setPaused: (paused: boolean) => void;
   animationSpeed: number;
   setAnimationSpeed: (speed: number) => void;
+  selectedCohorts: number | 'all';
+  setSelectedCohorts: (cohorts: number | 'all') => void;
 }
 
 const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
@@ -24,6 +26,8 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   setPaused,
   animationSpeed,
   setAnimationSpeed,
+  selectedCohorts,
+  setSelectedCohorts,
 }) => {
   return (
     <div
@@ -55,6 +59,42 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
         className="filter-buttons"
         style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
       >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '8px',
+          }}
+        >
+          <span style={{ color: '#fff', fontSize: '12px', minWidth: '65px' }}>
+            Cohorts:
+          </span>
+          <select
+            value={selectedCohorts}
+            onChange={(e) => {
+              const value = e.target.value;
+              setSelectedCohorts(value === 'all' ? 'all' : Number(value));
+            }}
+            style={{
+              flex: 1,
+              padding: '5px',
+              borderRadius: '4px',
+              border: '1px solid #0077B6',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              color: '#fff',
+              fontSize: '12px',
+            }}
+          >
+            <option value="all">All cohorts</option>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((value) => (
+              <option key={value} value={value}>
+                Latest {value}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <button
           style={{
             background: showHWPOnly ? '#FF8500' : 'rgba(255,255,255,0.1)',
