@@ -147,3 +147,97 @@
   padding: 40px;
   color: #dc3545;
 }
+
+/* Updated styles for clickable elements */
+.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease-in-out;
+  color: #00acc1; /* Turquoise color by default */
+}
+
+.clickable:hover {
+  color: #007c91; /* Darker turquoise on hover */
+}
+
+.clickable-txid {
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #00acc1; /* Turquoise color by default */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.05
+  ); /* Very light turquoise background */
+}
+
+.clickable-txid:hover {
+  color: #007c91; /* Darker turquoise on hover */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.15
+  ); /* Slightly darker background on hover */
+}
+
+.clickable-address {
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #00acc1; /* Turquoise color by default */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.05
+  ); /* Very light turquoise background */
+}
+
+.clickable-address:hover {
+  color: #007c91; /* Darker turquoise on hover */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.15
+  ); /* Slightly darker background on hover */
+}
+
+.clickable-block {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  font-weight: 500;
+  color: #00acc1; /* Turquoise color by default */
+}
+
+.clickable-block:hover {
+  color: #007c91; /* Darker turquoise on hover */
+}
+
+/* Styling for debug output */
+.debug-info {
+  background-color: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  margin: 10px 0;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #333;
+  white-space: pre-wrap;
+}
+
+.debug-info-title {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.debug-info-content {
+  margin: 0;
+}

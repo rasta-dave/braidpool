@@ -19,12 +19,49 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HomeIcon from '@mui/icons-material/Home';
+import LinkIcon from '@mui/icons-material/Link';
+import LaunchIcon from '@mui/icons-material/Launch';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import {
   formatTimestamp,
   formatBtcValue,
   formatFileSize,
   timeAgo,
 } from '../../utils';
+import './TransactionDetails.css';
+
+interface DebugInfoProps {
+  transaction: BraidTransaction;
+  showDebug: boolean;
+}
+
+const DebugInfo: React.FC<DebugInfoProps> = ({ transaction, showDebug }) => {
+  if (!showDebug) return null;
+
+  return (
+    <Box className="debug-info">
+      <Typography className="debug-info-title">🐞 Debug Information</Typography>
+      <pre className="debug-info-content">
+        {JSON.stringify(
+          {
+            txid: transaction.txid,
+            hash: transaction.hash,
+            size: transaction.size,
+            weight: transaction.weight,
+            fee: transaction.fee,
+            feePerVsize: transaction.feePerVsize,
+            timestamp: transaction.timestamp,
+            status: transaction.status,
+            vinCount: transaction.vin.length,
+            voutCount: transaction.vout.length,
+          },
+          null,
+          2
+        )}
+      </pre>
+    </Box>
+  );
+};
 
 const TransactionDetails: React.FC = () => {
   const { txid } = useParams<{ txid: string }>();
@@ -33,6 +70,8 @@ const TransactionDetails: React.FC = () => {
   const [transaction, setTransaction] = useState<BraidTransaction | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
 
   console.log('⚡ TransactionDetails component rendering');
   console.log('⚡ txid from params:', txid);
@@ -46,6 +85,44 @@ const TransactionDetails: React.FC = () => {
   const handleBackToDashboard = () => {
     console.log('🏠 Navigating back to dashboard from tx details');
     navigate('/', { replace: true });
+  };
+
+  const handleTxidClick = (id: string) => {
+    console.log('🔗 Clicking transaction link:', id);
+    console.log('🚀 Navigating to transaction details page');
+    navigate(`/explorer/tx/${id}`);
+  };
+
+  const handleAddressClick = (address: string) => {
+    console.log('🔗 Clicking address link:', address);
+    // In a real app, you would navigate to an address page
+    console.log(`🏠 Would navigate to address details: ${address}`);
+    // For demo purposes, we'll show an alert
+    alert(`Feature coming soon: View details for address ${address}`);
+  };
+
+  const handleBlockClick = (height: number) => {
+    console.log('🔗 Clicking block height:', height);
+    console.log(`🧱 Navigating to block details page for height: ${height}`);
+    navigate(`/explorer/block/${height}`);
+  };
+
+  const handleCopyToClipboard = (text: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the parent click handler
+    console.log('📋 Copying to clipboard:', text);
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        console.log('✅ Copied successfully!');
+        setCopiedText(text);
+        // Clear the copied text status after 2 seconds
+        setTimeout(() => {
+          setCopiedText(null);
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('❌ Failed to copy text:', err);
+      });
   };
 
   useEffect(() => {
@@ -72,6 +149,9 @@ const TransactionDetails: React.FC = () => {
         const txService = new TransactionService();
         const tx = await txService.getTransaction(transactionId);
         console.log('✅ Transaction data received:', tx);
+        console.log('💲 Transaction fee:', tx.fee);
+        console.log('📏 Transaction size:', tx.size);
+        console.log('⚖️ Transaction weight:', tx.weight);
         setTransaction(tx);
       } catch (err) {
         console.error('❌ Error fetching transaction:', err);
@@ -87,6 +167,22 @@ const TransactionDetails: React.FC = () => {
 
     fetchTransaction();
   }, [txid, location]);
+
+  // Add keyboard shortcut for toggling debug mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Alt+D to toggle debug mode
+      if (e.altKey && e.key === 'd') {
+        console.log('🐞 Toggling debug mode');
+        setShowDebug((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -149,6 +245,8 @@ const TransactionDetails: React.FC = () => {
       value: transaction.status.block_height
         ? transaction.status.block_height.toLocaleString()
         : 'Unconfirmed',
+      clickable: transaction.status.block_height ? true : false,
+      onClick: () => handleBlockClick(transaction.status.block_height!),
     },
     {
       label: 'Timestamp',
@@ -179,6 +277,10 @@ const TransactionDetails: React.FC = () => {
 
   return (
     <Box>
+      {transaction && (
+        <DebugInfo transaction={transaction} showDebug={showDebug} />
+      )}
+
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <ButtonGroup variant="outlined">
           <Button startIcon={<ArrowBackIcon />} onClick={handleBackToExplorer}>
@@ -215,9 +317,57 @@ const TransactionDetails: React.FC = () => {
 
           <Typography variant="subtitle1" gutterBottom mb={2}>
             Transaction ID:
-            <Typography component="span" fontFamily="monospace" sx={{ ml: 1 }}>
-              {transaction.txid}
-            </Typography>
+            <Box
+              component="span"
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                ml: 1,
+              }}
+            >
+              <Typography
+                component="span"
+                fontFamily="monospace"
+                className="clickable-txid"
+                sx={{
+                  cursor: 'pointer',
+                  '&:hover': {
+                    color: '#007c91',
+                  },
+                }}
+                onClick={() => handleTxidClick(transaction.txid)}
+              >
+                {transaction.txid}
+                <Box component="span">
+                  <LinkIcon
+                    fontSize="small"
+                    sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                  />
+                </Box>
+              </Typography>
+              <Tooltip
+                title={
+                  copiedText === transaction.txid
+                    ? 'Copied!'
+                    : 'Copy to clipboard'
+                }
+                placement="top"
+              >
+                <Box component="span">
+                  <ContentCopyIcon
+                    fontSize="small"
+                    sx={{
+                      ml: 1,
+                      fontSize: '1rem',
+                      color:
+                        copiedText === transaction.txid ? '#4caf50' : '#00acc1',
+                      cursor: 'pointer',
+                    }}
+                    onClick={(e) => handleCopyToClipboard(transaction.txid, e)}
+                  />
+                </Box>
+              </Tooltip>
+            </Box>
           </Typography>
 
           <Divider sx={{ my: 2 }} />
@@ -252,22 +402,54 @@ const TransactionDetails: React.FC = () => {
                       <Typography
                         variant="body2"
                         fontWeight="medium"
+                        className={info.clickable ? 'clickable-block' : ''}
                         sx={{
                           wordBreak: 'break-all',
+                          cursor: info.clickable ? 'pointer' : 'default',
+                          display: info.clickable ? 'inline-flex' : 'block',
+                          alignItems: 'center',
+                          '&:hover': info.clickable
+                            ? {
+                                color: '#007c91',
+                              }
+                            : {},
                         }}
+                        onClick={info.onClick}
                       >
                         {info.chip || info.value}
+                        {info.clickable && (
+                          <LaunchIcon
+                            fontSize="small"
+                            sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                          />
+                        )}
                       </Typography>
                     </Tooltip>
                   ) : (
                     <Typography
                       variant="body2"
                       fontWeight="medium"
+                      className={info.clickable ? 'clickable-block' : ''}
                       sx={{
                         wordBreak: 'break-all',
+                        cursor: info.clickable ? 'pointer' : 'default',
+                        display: info.clickable ? 'inline-flex' : 'block',
+                        alignItems: 'center',
+                        '&:hover': info.clickable
+                          ? {
+                              color: '#007c91',
+                            }
+                          : {},
                       }}
+                      onClick={info.onClick}
                     >
                       {info.chip || info.value}
+                      {info.clickable && (
+                        <LaunchIcon
+                          fontSize="small"
+                          sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                        />
+                      )}
                     </Typography>
                   )}
                 </Paper>
@@ -316,9 +498,59 @@ const TransactionDetails: React.FC = () => {
                     <Typography
                       variant="body2"
                       fontFamily="monospace"
-                      sx={{ mb: 1, wordBreak: 'break-all' }}
+                      className="clickable-txid"
+                      sx={{
+                        mb: 1,
+                        wordBreak: 'break-all',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        '&:hover': {
+                          color: '#007c91',
+                        },
+                      }}
+                      onClick={() => handleTxidClick(input.txid)}
                     >
                       {input.txid}
+                      <Box
+                        component="span"
+                        sx={{ display: 'inline-flex', alignItems: 'center' }}
+                      >
+                        <Tooltip title="View transaction" placement="top">
+                          <Box component="span">
+                            <LinkIcon
+                              fontSize="small"
+                              sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                            />
+                          </Box>
+                        </Tooltip>
+                        <Tooltip
+                          title={
+                            copiedText === input.txid
+                              ? 'Copied!'
+                              : 'Copy to clipboard'
+                          }
+                          placement="top"
+                        >
+                          <Box component="span">
+                            <ContentCopyIcon
+                              fontSize="small"
+                              sx={{
+                                ml: 0.5,
+                                fontSize: '0.9rem',
+                                color:
+                                  copiedText === input.txid
+                                    ? '#4caf50'
+                                    : 'inherit',
+                                cursor: 'pointer',
+                              }}
+                              onClick={(e) =>
+                                handleCopyToClipboard(input.txid, e)
+                              }
+                            />
+                          </Box>
+                        </Tooltip>
+                      </Box>
                     </Typography>
 
                     {input.prevout && (
@@ -329,9 +561,53 @@ const TransactionDetails: React.FC = () => {
                         <Typography
                           variant="body2"
                           fontFamily="monospace"
-                          sx={{ wordBreak: 'break-all' }}
+                          className="clickable-address"
+                          sx={{
+                            wordBreak: 'break-all',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            '&:hover': {
+                              color: '#007c91',
+                            },
+                          }}
+                          onClick={() =>
+                            handleAddressClick(
+                              input.prevout?.scriptpubkey_address || ''
+                            )
+                          }
                         >
                           {input.prevout.scriptpubkey_address || 'Unknown'}
+                          <Tooltip
+                            title={
+                              copiedText === input.prevout?.scriptpubkey_address
+                                ? 'Copied!'
+                                : 'Copy to clipboard'
+                            }
+                            placement="top"
+                          >
+                            <Box component="span">
+                              <ContentCopyIcon
+                                fontSize="small"
+                                sx={{
+                                  ml: 0.5,
+                                  fontSize: '0.9rem',
+                                  color:
+                                    copiedText ===
+                                    input.prevout?.scriptpubkey_address
+                                      ? '#4caf50'
+                                      : 'inherit',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={(e) =>
+                                  handleCopyToClipboard(
+                                    input.prevout?.scriptpubkey_address || '',
+                                    e
+                                  )
+                                }
+                              />
+                            </Box>
+                          </Tooltip>
                         </Typography>
                       </>
                     )}
@@ -376,9 +652,51 @@ const TransactionDetails: React.FC = () => {
                 <Typography
                   variant="body2"
                   fontFamily="monospace"
-                  sx={{ mb: 1, wordBreak: 'break-all' }}
+                  className="clickable-address"
+                  sx={{
+                    mb: 1,
+                    wordBreak: 'break-all',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    '&:hover': {
+                      color: '#007c91',
+                    },
+                  }}
+                  onClick={() =>
+                    handleAddressClick(output.scriptpubkey_address || '')
+                  }
                 >
                   {output.scriptpubkey_address || 'Unknown'}
+                  <Tooltip
+                    title={
+                      copiedText === output.scriptpubkey_address
+                        ? 'Copied!'
+                        : 'Copy to clipboard'
+                    }
+                    placement="top"
+                  >
+                    <Box component="span">
+                      <ContentCopyIcon
+                        fontSize="small"
+                        sx={{
+                          ml: 0.5,
+                          fontSize: '0.9rem',
+                          color:
+                            copiedText === output.scriptpubkey_address
+                              ? '#4caf50'
+                              : 'inherit',
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) =>
+                          handleCopyToClipboard(
+                            output.scriptpubkey_address || '',
+                            e
+                          )
+                        }
+                      />
+                    </Box>
+                  </Tooltip>
                 </Typography>
 
                 <Typography variant="caption" color="text.secondary">
