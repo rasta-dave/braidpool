@@ -55,6 +55,7 @@ import BlockDetail, { Block } from './components/blocks/BlockDetail';
 import TransactionRoutes from './components/transactions/TransactionRoutes';
 import TransactionDetails from './components/transactions/TransactionDetails';
 import { BlockchainBlocks } from './components/blockchain';
+import BraidPoolDAG from './components/visualization/BraidPoolDAG';
 import {
   Routes,
   Route,
@@ -1126,80 +1127,10 @@ const ExplorerMainView: React.FC<{
             </CardContent>
           </Card>
 
-          {/* Block Timeline Chart */}
+          {/* BraidPool DAG Visualization (replacing Block Timeline Chart) */}
           <Card sx={{ mb: 3 }} className="explorer-card">
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Block Timeline
-              </Typography>
-              <Box sx={{ height: 300 }} className="chart-container">
-                {initialLoad ? (
-                  <div className="skeleton" style={{ height: '100%' }} />
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={memoizedBlocks}
-                      key="block-timeline-chart"
-                      margin={{
-                        top: 5,
-                        right: 30,
-                        left: 20,
-                        bottom: 5,
-                      }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="height"
-                        allowDataOverflow={false}
-                        tickFormatter={(value) => value.toString()}
-                      />
-                      <YAxis
-                        yAxisId="left"
-                        domain={['auto', 'auto']}
-                        allowDataOverflow={false}
-                      />
-                      <YAxis
-                        yAxisId="right"
-                        orientation="right"
-                        domain={['auto', 'auto']}
-                        allowDataOverflow={false}
-                      />
-                      <RechartsTooltip
-                        animationDuration={300}
-                        animationEasing="ease-out"
-                        formatter={(value, name) => {
-                          return [value, name];
-                        }}
-                      />
-                      <Legend />
-                      <Line
-                        yAxisId="left"
-                        type="monotone"
-                        dataKey="work"
-                        stroke="#8884d8"
-                        name="Work"
-                        isAnimationActive={!isFetchingData}
-                        animationDuration={800}
-                        animationEasing="ease-in-out"
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5, strokeWidth: 1 }}
-                      />
-                      <Line
-                        yAxisId="right"
-                        type="monotone"
-                        dataKey="difficulty"
-                        stroke="#82ca9d"
-                        name="Difficulty"
-                        isAnimationActive={!isFetchingData}
-                        animationDuration={800}
-                        animationEasing="ease-in-out"
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5, strokeWidth: 1 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </Box>
+              <BraidPoolDAG />
             </CardContent>
           </Card>
 
