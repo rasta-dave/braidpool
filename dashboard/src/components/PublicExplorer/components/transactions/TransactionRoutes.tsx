@@ -5,7 +5,7 @@ import TransactionDetails from './TransactionDetails';
 const TransactionRoutes: React.FC = () => {
   return (
     <Routes>
-      <Route path="/tx/:txid" element={<TransactionDetails />} />
+      <Route path=":txid" element={<TransactionDetails />} />
     </Routes>
   );
 };

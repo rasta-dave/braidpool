@@ -103,3 +103,53 @@ export function timeAgo(timestamp: number): string {
   if (diff < 31536000) return `${Math.floor(diff / 2592000)} months ago`;
   return `${Math.floor(diff / 31536000)} years ago`;
 }
+
+/**
+ * Copy text to clipboard with visual feedback
+ * @param text Text to copy to clipboard
+ * @param event Optional mouse event to stop propagation
+ * @param setStatus Optional callback to update UI state with copied status
+ */
+export function copyToClipboard(
+  text: string,
+  event?: React.MouseEvent,
+  setStatus?: (text: string | null) => void
+): void {
+  if (event) {
+    event.stopPropagation(); // Prevent triggering parent click handler
+  }
+  console.log('📋 Copying to clipboard:', text);
+
+  navigator.clipboard
+    .writeText(text)
+    .then(() => {
+      console.log('✅ Copied successfully!');
+      if (setStatus) {
+        setStatus(text);
+        // Clear the status after 2 seconds
+        setTimeout(() => {
+          setStatus(null);
+        }, 2000);
+      }
+    })
+    .catch((err) => {
+      console.error('❌ Failed to copy text:', err);
+    });
+}
+
+/**
+ * Calculate a dollar amount from BTC value
+ * @param btc BTC amount
+ * @param rate Exchange rate (default: $95,200 USD)
+ * @returns Formatted dollar amount string
+ */
+export function calculateDollarAmount(
+  btc: number,
+  rate: number = 95200
+): string {
+  const usdAmount = btc * rate;
+  return `$${usdAmount.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}

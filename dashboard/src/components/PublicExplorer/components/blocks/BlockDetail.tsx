@@ -27,11 +27,43 @@ import {
   formatFileSize,
   formatDifficulty,
   timeAgo,
+  copyToClipboard,
+  calculateDollarAmount,
 } from '../../utils';
+import LinkIcon from '@mui/icons-material/Link';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import LaunchIcon from '@mui/icons-material/Launch';
 import BlockTransactions from './BlockTransactions';
 import { BraidTransaction } from '../transactions/BraidTransaction';
 import { formatDistanceToNow } from 'date-fns';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import '../../PublicExplorer.css';
+
+// Custom tooltip wrapper for copy functionality
+interface CopyTooltipProps {
+  copiedText: string | null;
+  compareValue: string;
+  children: React.ReactElement;
+  placement?: 'top' | 'bottom' | 'left' | 'right';
+}
+
+const CopyTooltip: React.FC<CopyTooltipProps> = ({
+  copiedText,
+  compareValue,
+  children,
+  placement = 'top',
+}) => {
+  return (
+    <Tooltip
+      title={
+        copiedText === compareValue ? 'Copied! 📋✅' : 'Copy to clipboard 📋'
+      }
+      placement={placement}
+    >
+      {children}
+    </Tooltip>
+  );
+};
 
 export interface Transaction {
   txid: string;
@@ -79,7 +111,37 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
   error,
 }) => {
   const [page, setPage] = useState(1);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
   const itemsPerPage = 10;
+  const navigate = useNavigate();
+
+  const handleCopyToClipboard = (text: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the parent click handler
+    console.log('📋 Copying to clipboard:', text);
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        console.log('✅ Copied successfully!');
+        setCopiedText(text);
+        // Clear the copied text status after 2 seconds
+        setTimeout(() => {
+          setCopiedText(null);
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('❌ Failed to copy text:', err);
+      });
+  };
+
+  const handleBlockClick = (hash: string) => {
+    console.log('🔗 Navigating to block with hash:', hash);
+    navigate(`/explorer/block/${hash}`);
+  };
+
+  const handleTxidClick = (txid: string) => {
+    console.log('🔗 Navigating to transaction with ID:', txid);
+    navigate(`/explorer/tx/${txid}`);
+  };
 
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
@@ -174,9 +236,29 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
               <Typography variant="subtitle1" color="text.secondary">
                 Hash
               </Typography>
-              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                {block.hash}
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Typography
+                  variant="body1"
+                  className="clickable-hash"
+                  sx={{ wordBreak: 'break-all' }}
+                >
+                  {block.hash}
+                </Typography>
+                <CopyTooltip copiedText={copiedText} compareValue={block.hash}>
+                  <Box component="span" sx={{ ml: 1 }}>
+                    <ContentCopyIcon
+                      fontSize="small"
+                      sx={{
+                        fontSize: '1rem',
+                        color:
+                          copiedText === block.hash ? '#4caf50' : '#00acc1',
+                        cursor: 'pointer',
+                      }}
+                      onClick={(e) => handleCopyToClipboard(block.hash, e)}
+                    />
+                  </Box>
+                </CopyTooltip>
+              </Box>
             </Box>
 
             <Box sx={{ width: { xs: '100%', md: '48%' } }}>
@@ -248,9 +330,53 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
               <Typography variant="subtitle1" color="text.secondary">
                 Previous Block
               </Typography>
-              <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                {block.previousBlockHash || 'Genesis Block'}
-              </Typography>
+              {block.previousBlockHash ? (
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Typography
+                    variant="body1"
+                    className="clickable-hash"
+                    sx={{
+                      wordBreak: 'break-all',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() =>
+                      handleBlockClick(block.previousBlockHash || '')
+                    }
+                  >
+                    {block.previousBlockHash}
+                    <LinkIcon
+                      fontSize="small"
+                      sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                    />
+                  </Typography>
+                  <CopyTooltip
+                    copiedText={copiedText}
+                    compareValue={block.previousBlockHash}
+                  >
+                    <Box component="span" sx={{ ml: 1 }}>
+                      <ContentCopyIcon
+                        fontSize="small"
+                        sx={{
+                          fontSize: '1rem',
+                          color:
+                            copiedText === block.previousBlockHash
+                              ? '#4caf50'
+                              : '#00acc1',
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) =>
+                          handleCopyToClipboard(
+                            block.previousBlockHash || '',
+                            e
+                          )
+                        }
+                      />
+                    </Box>
+                  </CopyTooltip>
+                </Box>
+              ) : (
+                <Typography variant="body1">Genesis Block</Typography>
+              )}
             </Box>
 
             <Box sx={{ width: { xs: '48%', md: '23%' } }}>
@@ -333,19 +459,46 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
             {currentTransactions.map((tx) => (
               <TableRow key={tx.txid} hover>
                 <TableCell>
-                  <Link
-                    component={RouterLink}
-                    to={`/tx/${tx.txid}`}
-                    sx={{
-                      fontFamily: 'monospace',
-                      textDecoration: 'none',
-                      '&:hover': {
-                        textDecoration: 'underline',
-                      },
-                    }}
-                  >
-                    {truncateString(tx.txid, 16)}
-                  </Link>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Typography
+                      className="clickable-txid"
+                      onClick={() => handleTxidClick(tx.txid)}
+                      sx={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        fontFamily: 'monospace',
+                        cursor: 'pointer',
+                        color: '#00acc1',
+                        '&:hover': {
+                          color: '#007c91',
+                          textDecoration: 'underline',
+                        },
+                      }}
+                    >
+                      {truncateString(tx.txid, 12)}
+                      <LinkIcon
+                        fontSize="small"
+                        sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                      />
+                    </Typography>
+                    <CopyTooltip copiedText={copiedText} compareValue={tx.txid}>
+                      <Box component="span" sx={{ ml: 1 }}>
+                        <ContentCopyIcon
+                          fontSize="small"
+                          sx={{
+                            fontSize: '0.9rem',
+                            color:
+                              copiedText === tx.txid ? '#4caf50' : '#00acc1',
+                            cursor: 'pointer',
+                            '&:hover': {
+                              color: '#007c91',
+                            },
+                          }}
+                          onClick={(e) => handleCopyToClipboard(tx.txid, e)}
+                        />
+                      </Box>
+                    </CopyTooltip>
+                  </Box>
                 </TableCell>
                 <TableCell>{formatTimestamp(tx.timestamp / 1000)}</TableCell>
                 <TableCell align="right">{formatFileSize(tx.size)}</TableCell>
@@ -353,9 +506,21 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
                   {(tx.weight / 1000).toFixed(2)} kWU
                 </TableCell>
                 <TableCell align="right">
-                  {formatBtcValue(tx.fee)} {calculateDollarAmount(tx.fee)}
+                  <Typography fontFamily="monospace" fontWeight="medium">
+                    {formatBtcValue(tx.fee)}{' '}
+                    <Typography
+                      component="span"
+                      sx={{ color: 'text.secondary', fontSize: '0.85em' }}
+                    >
+                      {calculateDollarAmount(tx.fee / 100000000)}
+                    </Typography>
+                  </Typography>
                 </TableCell>
-                <TableCell align="right">{formatBtcValue(tx.value)}</TableCell>
+                <TableCell align="right">
+                  <Typography fontFamily="monospace" fontWeight="medium">
+                    {formatBtcValue(tx.value)}
+                  </Typography>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

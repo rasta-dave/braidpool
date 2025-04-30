@@ -25,6 +25,7 @@ import {
   Fade,
   Breadcrumbs,
   Link as MuiLink,
+  Tooltip,
 } from '@mui/material';
 import {
   LineChart,
@@ -32,19 +33,35 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
 } from 'recharts';
 import SearchIcon from '@mui/icons-material/Search';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HomeIcon from '@mui/icons-material/Home';
+import LinkIcon from '@mui/icons-material/Link';
+import LaunchIcon from '@mui/icons-material/Launch';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import './PublicExplorer.css';
+import {
+  formatTimestamp,
+  formatBtcValue,
+  copyToClipboard,
+  formatNumber,
+  truncateString,
+} from './utils';
 import BlockDetail, { Block } from './components/blocks/BlockDetail';
 import TransactionRoutes from './components/transactions/TransactionRoutes';
 import TransactionDetails from './components/transactions/TransactionDetails';
 import { BlockchainBlocks } from './components/blockchain';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import {
+  Routes,
+  Route,
+  useLocation,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 
 interface BlockData {
   height: number;
@@ -198,6 +215,7 @@ const PublicExplorer: React.FC = () => {
   const navigate = useNavigate();
   const blockUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [newBlocks, setNewBlocks] = useState<string[]>([]);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Function declarations to solve circular reference
   const simulateNewBlockRef = useRef<(() => void) | null>(null);
@@ -352,89 +370,8 @@ const PublicExplorer: React.FC = () => {
       )}", last 10: "${hash.substring(hash.length - 10)}"`
     );
 
-    setBlockDetailLoading(true);
-    setBlockDetailError(null);
-
-    try {
-      // Make sure hash has correct format - ensure it starts with zeros if needed
-      const formattedHash = hash.startsWith('0000') ? hash : `0000${hash}`;
-      console.log(`🔄 Using formatted hash: ${formattedHash}`);
-
-      const apiUrl = `http://localhost:3100/blocks/${formattedHash}`;
-      console.log(`🔄 Fetching block details from: ${apiUrl}`);
-
-      const response = await fetch(apiUrl);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`❌ API response not OK: ${response.status}`, errorText);
-
-        // Try again with the original hash as a fallback
-        console.log(`🔄 Retrying with original hash: ${hash}`);
-        const fallbackUrl = `http://localhost:3100/blocks/${hash}`;
-        const fallbackResponse = await fetch(fallbackUrl);
-
-        if (!fallbackResponse.ok) {
-          throw new Error(
-            `Failed to fetch block details (${response.status}): ${errorText}`
-          );
-        }
-
-        const blockData = await fallbackResponse.json();
-        console.log('📦 Received block data on retry:', blockData);
-        processBlockData(blockData);
-      } else {
-        const blockData = await response.json();
-        console.log('📦 Received block data:', blockData);
-        processBlockData(blockData);
-      }
-    } catch (err) {
-      console.error('❌ Error fetching block details:', err);
-      setBlockDetailError(
-        err instanceof Error ? err.message : 'Failed to load block details'
-      );
-    } finally {
-      setBlockDetailLoading(false);
-    }
-  };
-
-  // Helper function to process block data
-  const processBlockData = (blockData: any) => {
-    // Transform the data to match the Block interface expected by BlockDetail
-    const transformedBlock: Block = {
-      hash: blockData.hash,
-      height: blockData.height,
-      timestamp: blockData.timestamp,
-      difficulty: blockData.difficulty,
-      merkleRoot: blockData.hash.substring(8, 40), // Using part of hash as mock merkle root
-      nonce: Math.floor(Math.random() * 1000000),
-      bits: (blockData.difficulty / 1000).toFixed(2),
-      size: blockData.size || Math.floor(Math.random() * 1000) + 500,
-      weight: blockData.weight || Math.floor(Math.random() * 3000) + 1500,
-      version: 1,
-      confirmations: Math.floor(Math.random() * 10) + 1,
-      transactions:
-        blockData.transactionData?.map((tx: any) => ({
-          txid: tx.txid,
-          timestamp: tx.timestamp,
-          size: tx.size,
-          weight: tx.size * 4, // Simple estimation of weight
-          fee: parseFloat(tx.fee) * 100000000, // Convert to satoshis
-          value: tx.value * 100000000, // Convert to satoshis
-          inputs: tx.inputs,
-          outputs: tx.outputs,
-        })) || [],
-      fees: parseFloat(blockData.totalFees || '0') * 100000000, // Convert to satoshis
-      previousBlockHash: blockData.parents ? blockData.parents[0] : '',
-      nextBlockHash:
-        blockData.height < (blocks[0]?.height || 0)
-          ? blocks.find((b) => b.height === blockData.height + 1)?.hash
-          : undefined,
-    };
-
-    console.log('✅ Transformed block data:', transformedBlock);
-    setSelectedBlock(transformedBlock);
-    console.log('✅ Block details loaded successfully');
+    // Navigate to the block detail page
+    navigate(`/explorer/block/${hash}`);
   };
 
   // Function to clear selected block and return to explorer
@@ -725,6 +662,154 @@ const PublicExplorer: React.FC = () => {
     };
   }, [selectedBlock, displayBlockCount, scheduleNextBlockUpdate]);
 
+  // Function to handle copying to clipboard
+  const handleCopyToClipboard = (text: string, event: React.MouseEvent) => {
+    copyToClipboard(text, event, setCopiedText);
+  };
+
+  // BlockDetailView component to handle its own data loading
+  const BlockDetailView: React.FC = () => {
+    const { hash } = useParams<{ hash: string }>();
+    const [block, setBlock] = useState<Block | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+      const fetchBlockData = async () => {
+        if (!hash) return;
+
+        setIsLoading(true);
+        setError(null);
+
+        try {
+          console.log(`🔄 Fetching block details for hash: ${hash}`);
+          // Make sure hash has correct format - ensure it starts with zeros if needed
+          const formattedHash = hash.startsWith('0000') ? hash : `0000${hash}`;
+
+          const apiUrl = `http://localhost:3100/blocks/${formattedHash}`;
+          console.log(`🔄 Fetching from API: ${apiUrl}`);
+
+          const response = await fetch(apiUrl);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(
+              `❌ API response not OK: ${response.status}`,
+              errorText
+            );
+
+            // Try again with the original hash as a fallback
+            console.log(`🔄 Retrying with original hash: ${hash}`);
+            const fallbackUrl = `http://localhost:3100/blocks/${hash}`;
+            const fallbackResponse = await fetch(fallbackUrl);
+
+            if (!fallbackResponse.ok) {
+              throw new Error(
+                `Failed to fetch block details (${response.status}): ${errorText}`
+              );
+            }
+
+            const blockData = await fallbackResponse.json();
+            processBlockData(blockData);
+          } else {
+            const blockData = await response.json();
+            processBlockData(blockData);
+          }
+        } catch (err) {
+          console.error('❌ Error fetching block details:', err);
+          setError(
+            err instanceof Error ? err.message : 'Failed to load block details'
+          );
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      fetchBlockData();
+    }, [hash]);
+
+    const processBlockData = (blockData: any) => {
+      // Transform the data to match the Block interface expected by BlockDetail
+      const transformedBlock: Block = {
+        hash: blockData.hash,
+        height: blockData.height,
+        timestamp: blockData.timestamp,
+        difficulty: blockData.difficulty,
+        merkleRoot: blockData.hash.substring(8, 40), // Using part of hash as mock merkle root
+        nonce: Math.floor(Math.random() * 1000000),
+        bits: (blockData.difficulty / 1000).toFixed(2),
+        size: blockData.size || Math.floor(Math.random() * 1000) + 500,
+        weight: blockData.weight || Math.floor(Math.random() * 3000) + 1500,
+        version: 1,
+        confirmations: Math.floor(Math.random() * 10) + 1,
+        transactions:
+          blockData.transactionData?.map((tx: any) => ({
+            txid: tx.txid,
+            timestamp: tx.timestamp,
+            size: tx.size,
+            weight: tx.size * 4, // Simple estimation of weight
+            fee: parseFloat(tx.fee) * 100000000, // Convert to satoshis
+            value: tx.value * 100000000, // Convert to satoshis
+            inputs: tx.inputs,
+            outputs: tx.outputs,
+          })) || [],
+        fees: parseFloat(blockData.totalFees || '0') * 100000000, // Convert to satoshis
+        previousBlockHash: blockData.parents ? blockData.parents[0] : '',
+        nextBlockHash: undefined, // Will be set by the API in a real implementation
+      };
+
+      console.log('✅ Transformed block data:', transformedBlock);
+      setBlock(transformedBlock);
+    };
+
+    const handleBackToExplorer = () => {
+      navigate('/explorer');
+    };
+
+    return (
+      <Box>
+        <Box sx={{ mb: 2 }}>
+          <Breadcrumbs separator="›" aria-label="breadcrumb">
+            <MuiLink
+              component="button"
+              variant="body1"
+              onClick={handleBackToExplorer}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+              }}
+              underline="hover"
+            >
+              <ArrowBackIcon sx={{ mr: 0.5, fontSize: '0.8rem' }} />
+              Explorer
+            </MuiLink>
+            <Typography color="text.primary">
+              {block ? `Block #${block.height}` : 'Loading...'}
+            </Typography>
+          </Breadcrumbs>
+        </Box>
+
+        <Button
+          startIcon={<ArrowBackIcon />}
+          onClick={handleBackToExplorer}
+          sx={{ mb: 2 }}
+        >
+          Back to Explorer
+        </Button>
+
+        {block && (
+          <BlockDetail
+            block={block}
+            isLoading={isLoading}
+            error={error || undefined}
+          />
+        )}
+      </Box>
+    );
+  };
+
   // Skeleton loading screen for initial load
   if (loading) {
     return (
@@ -807,7 +892,7 @@ const PublicExplorer: React.FC = () => {
     <Box className="public-explorer">
       <Routes>
         <Route
-          path="*"
+          path="/"
           element={
             <Box>
               {/* Dashboard navigation button */}
@@ -844,16 +929,20 @@ const PublicExplorer: React.FC = () => {
                 blocks={blocks}
                 formatDate={formatDate}
                 newBlocks={newBlocks}
+                copiedText={copiedText}
+                handleCopyToClipboard={handleCopyToClipboard}
               />
             </Box>
           }
         />
+        <Route path="/block/:hash" element={<BlockDetailView />} />
+        <Route path="/tx/*" element={<TransactionRoutes />} />
       </Routes>
     </Box>
   );
 };
 
-// Extracted component to avoid nesting issues
+// Extracted component to avoid nesting issues - update with new props
 const ExplorerMainView: React.FC<{
   selectedBlock: Block | null;
   handleBackToExplorer: () => void;
@@ -871,6 +960,8 @@ const ExplorerMainView: React.FC<{
   blocks: any[];
   formatDate: (timestamp: number) => string;
   newBlocks: string[];
+  copiedText?: string | null;
+  handleCopyToClipboard?: (text: string, event: React.MouseEvent) => void;
 }> = ({
   selectedBlock,
   handleBackToExplorer,
@@ -888,6 +979,8 @@ const ExplorerMainView: React.FC<{
   blocks,
   formatDate,
   newBlocks,
+  copiedText,
+  handleCopyToClipboard,
 }) => {
   return (
     <Box>
@@ -1071,7 +1164,7 @@ const ExplorerMainView: React.FC<{
                         domain={['auto', 'auto']}
                         allowDataOverflow={false}
                       />
-                      <Tooltip
+                      <RechartsTooltip
                         animationDuration={300}
                         animationEasing="ease-out"
                         formatter={(value, name) => {
@@ -1166,15 +1259,78 @@ const ExplorerMainView: React.FC<{
                               handleBlockClick(block.hash);
                             }}
                           >
-                            <TableCell>{block.height}</TableCell>
-                            <TableCell>{block.hash}</TableCell>
+                            <TableCell>
+                              <Typography
+                                className="clickable-block"
+                                sx={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                {block.height}
+                                <LaunchIcon
+                                  fontSize="small"
+                                  sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                                />
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box
+                                sx={{ display: 'flex', alignItems: 'center' }}
+                              >
+                                <Typography
+                                  className="clickable-hash"
+                                  sx={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    mr: 1,
+                                  }}
+                                >
+                                  {truncateString(block.hash, 10)}
+                                  <LinkIcon
+                                    fontSize="small"
+                                    sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                                  />
+                                </Typography>
+                                <Tooltip
+                                  title={
+                                    copiedText === block.hash
+                                      ? 'Copied!'
+                                      : 'Copy to clipboard'
+                                  }
+                                  placement="top"
+                                >
+                                  <Box component="span">
+                                    <ContentCopyIcon
+                                      fontSize="small"
+                                      sx={{
+                                        fontSize: '0.9rem',
+                                        color:
+                                          copiedText === block.hash
+                                            ? '#4caf50'
+                                            : '#00acc1',
+                                        cursor: 'pointer',
+                                      }}
+                                      onClick={(e) =>
+                                        handleCopyToClipboard &&
+                                        handleCopyToClipboard(block.hash, e)
+                                      }
+                                    />
+                                  </Box>
+                                </Tooltip>
+                              </Box>
+                            </TableCell>
                             <TableCell>{formatDate(block.timestamp)}</TableCell>
                             <TableCell>{block.miner}</TableCell>
-                            <TableCell>{block.transactions}</TableCell>
-                            <TableCell>{block.size}</TableCell>
-                            <TableCell>{block.weight}</TableCell>
-                            <TableCell>{block.work}</TableCell>
-                            <TableCell>{block.difficulty}</TableCell>
+                            <TableCell>
+                              {formatNumber(block.transactions)}
+                            </TableCell>
+                            <TableCell>{formatNumber(block.size)}</TableCell>
+                            <TableCell>{formatNumber(block.weight)}</TableCell>
+                            <TableCell>{formatNumber(block.work)}</TableCell>
+                            <TableCell>
+                              {formatNumber(block.difficulty)}
+                            </TableCell>
                           </TableRow>
                         ))}
                   </TableBody>

@@ -134,5 +134,110 @@
 }
 
 .table-row.clickable:hover {
-  background-color: rgba(25, 118, 210, 0.08);
+  background-color: rgba(0, 172, 193, 0.08);
+}
+
+/* Clickable element styles */
+.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease-in-out;
+  color: #00acc1; /* Turquoise color by default */
+}
+
+.clickable:hover {
+  color: #007c91; /* Darker turquoise on hover */
+}
+
+.clickable-hash {
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #00acc1; /* Turquoise color by default */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.05
+  ); /* Very light turquoise background */
+  display: inline-flex;
+  align-items: center;
+}
+
+.clickable-hash:hover {
+  color: #007c91; /* Darker turquoise on hover */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.15
+  ); /* Slightly darker background on hover */
+}
+
+.clickable-txid {
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #00acc1; /* Turquoise color by default */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.05
+  ); /* Very light turquoise background */
+  display: inline-flex;
+  align-items: center;
+}
+
+.clickable-txid:hover {
+  color: #007c91; /* Darker turquoise on hover */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.15
+  ); /* Slightly darker background on hover */
+}
+
+.clickable-address {
+  font-family: monospace;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #00acc1; /* Turquoise color by default */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.05
+  ); /* Very light turquoise background */
+  display: inline-flex;
+  align-items: center;
+}
+
+.clickable-address:hover {
+  color: #007c91; /* Darker turquoise on hover */
+  background-color: rgba(
+    0,
+    172,
+    193,
+    0.15
+  ); /* Slightly darker background on hover */
+}
+
+.clickable-block {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  font-weight: 500;
+  color: #00acc1; /* Turquoise color by default */
+  display: inline-flex;
+  align-items: center;
+}
+
+.clickable-block:hover {
+  color: #007c91; /* Darker turquoise on hover */
 }

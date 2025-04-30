@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Typography,
   Box,
@@ -16,6 +16,9 @@ import {
   Pagination,
 } from '@mui/material';
 import { formatTimestamp, formatBtcValue, formatFileSize } from '../../utils';
+import LinkIcon from '@mui/icons-material/Link';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import '../../PublicExplorer.css';
 
 interface Transaction {
   txid: string;
@@ -36,8 +39,10 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
   transactions,
 }) => {
   const [page, setPage] = useState(1);
+  const [copiedText, setCopiedText] = useState<string | null>(null);
   const itemsPerPage = 10;
   const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const navigate = useNavigate();
 
   const handlePageChange = (
     event: React.ChangeEvent<unknown>,
@@ -45,6 +50,29 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
   ) => {
     setPage(value);
     console.log(`📄 Changing to page ${value}`);
+  };
+
+  const handleCopyToClipboard = (text: string, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent triggering the parent click handler
+    console.log('📋 Copying to clipboard:', text);
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        console.log('✅ Copied successfully!');
+        setCopiedText(text);
+        // Clear the copied text status after 2 seconds
+        setTimeout(() => {
+          setCopiedText(null);
+        }, 2000);
+      })
+      .catch((err) => {
+        console.error('❌ Failed to copy text:', err);
+      });
+  };
+
+  const handleTxidClick = (txid: string) => {
+    console.log('🔗 Navigating to transaction with ID:', txid);
+    navigate(`/explorer/tx/${txid}`);
   };
 
   // Get current page items
@@ -113,20 +141,46 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                 {currentTransactions.map((tx) => (
                   <TableRow key={tx.txid} hover>
                     <TableCell>
-                      <Typography
-                        component={Link}
-                        to={`/tx/${tx.txid}`}
-                        sx={{
-                          color: 'primary.main',
-                          textDecoration: 'none',
-                          fontFamily: 'monospace',
-                          '&:hover': {
-                            textDecoration: 'underline',
-                          },
-                        }}
-                      >
-                        {tx.txid.slice(0, 16)}...
-                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <Typography
+                          className="clickable-txid"
+                          onClick={() => handleTxidClick(tx.txid)}
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontFamily: 'monospace',
+                          }}
+                        >
+                          {tx.txid.slice(0, 16)}...
+                          <LinkIcon
+                            fontSize="small"
+                            sx={{ ml: 0.5, fontSize: '0.9rem' }}
+                          />
+                        </Typography>
+                        <Tooltip
+                          title={
+                            copiedText === tx.txid
+                              ? 'Copied!'
+                              : 'Copy to clipboard'
+                          }
+                          placement="top"
+                        >
+                          <Box component="span" sx={{ ml: 1 }}>
+                            <ContentCopyIcon
+                              fontSize="small"
+                              sx={{
+                                fontSize: '0.9rem',
+                                color:
+                                  copiedText === tx.txid
+                                    ? '#4caf50'
+                                    : '#00acc1',
+                                cursor: 'pointer',
+                              }}
+                              onClick={(e) => handleCopyToClipboard(tx.txid, e)}
+                            />
+                          </Box>
+                        </Tooltip>
+                      </Box>
                     </TableCell>
                     <TableCell>
                       <Tooltip title={formatTimestamp(tx.timestamp)}>
@@ -143,7 +197,12 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                     <TableCell align="right">
                       <Typography fontFamily="monospace" fontWeight="medium">
                         {formatBtcValue(tx.fee)}{' '}
-                        {calculateDollarAmount(tx.fee / 100000000)}
+                        <Typography
+                          component="span"
+                          sx={{ color: 'text.secondary', fontSize: '0.85em' }}
+                        >
+                          {calculateDollarAmount(tx.fee / 100000000)}
+                        </Typography>
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
