@@ -234,23 +234,6 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
           >
             {paused ? 'Resume' : 'Pause'} Animation
           </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: '#fff', fontSize: '12px', minWidth: '45px' }}>
-              Speed:
-            </span>
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={animationSpeed}
-              onChange={(e) => setAnimationSpeed(parseInt(e.target.value))}
-              style={{ flex: 1 }}
-            />
-            <span style={{ color: '#fff', fontSize: '12px', minWidth: '20px' }}>
-              {animationSpeed}x
-            </span>
-          </div>
         </div>
       </div>
 
