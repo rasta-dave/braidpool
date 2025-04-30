@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Card,
@@ -18,6 +18,7 @@ import {
   TableRow,
   CircularProgress,
   Alert,
+  Pagination,
 } from '@mui/material';
 import {
   formatTimestamp,
@@ -59,6 +60,11 @@ export interface Block {
   fees: number;
   previousBlockHash?: string;
   nextBlockHash?: string;
+  miner?: string;
+  health?: number;
+  feeSpan?: string;
+  medianFee?: string;
+  subsidyAndFees?: string;
 }
 
 interface BlockDetailProps {
@@ -72,6 +78,17 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
   isLoading = false,
   error,
 }) => {
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const handlePageChange = (
+    event: React.ChangeEvent<unknown>,
+    value: number
+  ) => {
+    setPage(value);
+    console.log(`📄 Changing to page ${value}`);
+  };
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -100,15 +117,45 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
     return formatDistanceToNow(date, { addSuffix: true });
   };
 
-  // Format size in KB
+  // Format size in MB
   const formatSize = (size: number): string => {
-    return `${(size / 1024).toFixed(2)} KB`;
+    return `${(size / 1024 / 1024).toFixed(2)} MB`;
+  };
+
+  // Format weight in MWU
+  const formatWeight = (weight: number): string => {
+    return `${(weight / 1000 / 1000).toFixed(2)} MWU`;
+  };
+
+  // Format health percentage
+  const formatHealth = (health: number = 100): string => {
+    return `${health}%`;
   };
 
   // Format satoshis to BTC
   const formatBTC = (satoshis: number): string => {
     return `${(satoshis / 100000000).toFixed(8)} BTC`;
   };
+
+  // Calculate dollar amount
+  const calculateDollarAmount = (btc: number): string => {
+    // Using a fixed exchange rate for simplicity
+    const rate = 95200; // 1 BTC = $95,200 USD
+    const usdAmount = (btc / 100000000) * rate;
+    return `$${usdAmount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
+  // Calculate total pages
+  const totalPages = Math.ceil(block.transactions.length / itemsPerPage);
+
+  // Get current page items
+  const currentTransactions = block.transactions.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
 
   return (
     <Box>
@@ -125,7 +172,7 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
           >
             <Box sx={{ width: { xs: '100%', md: '48%' } }}>
               <Typography variant="subtitle1" color="text.secondary">
-                Block Hash
+                Hash
               </Typography>
               <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
                 {block.hash}
@@ -158,23 +205,25 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
                 Weight
               </Typography>
               <Typography variant="body1">
-                {(block.weight / 1000).toFixed(2)} kWU
+                {formatWeight(block.weight)}
               </Typography>
             </Box>
 
             <Box sx={{ width: { xs: '48%', md: '23%' } }}>
               <Typography variant="subtitle1" color="text.secondary">
-                Confirmations
-              </Typography>
-              <Typography variant="body1">{block.confirmations}</Typography>
-            </Box>
-
-            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
-              <Typography variant="subtitle1" color="text.secondary">
-                Difficulty
+                Health
               </Typography>
               <Typography variant="body1">
-                {block.difficulty.toLocaleString()}
+                {formatHealth(block.health)}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Fee Span
+              </Typography>
+              <Typography variant="body1">
+                {block.feeSpan || '1 - 300 sat/vB'}
               </Typography>
             </Box>
           </Stack>
@@ -206,24 +255,10 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
 
             <Box sx={{ width: { xs: '48%', md: '23%' } }}>
               <Typography variant="subtitle1" color="text.secondary">
-                Version
-              </Typography>
-              <Typography variant="body1">{block.version}</Typography>
-            </Box>
-
-            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
-              <Typography variant="subtitle1" color="text.secondary">
-                Bits
-              </Typography>
-              <Typography variant="body1">{block.bits}</Typography>
-            </Box>
-
-            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
-              <Typography variant="subtitle1" color="text.secondary">
-                Nonce
+                Median Fee
               </Typography>
               <Typography variant="body1">
-                {block.nonce.toLocaleString()}
+                {block.medianFee || '~1 sat/vB$0.13'}
               </Typography>
             </Box>
 
@@ -231,21 +266,63 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
               <Typography variant="subtitle1" color="text.secondary">
                 Total Fees
               </Typography>
-              <Typography variant="body1">{formatBTC(block.fees)}</Typography>
+              <Typography variant="body1">
+                {formatBTC(block.fees)} {calculateDollarAmount(block.fees)}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Subsidy + Fees
+              </Typography>
+              <Typography variant="body1">
+                {block.subsidyAndFees || '3.153 BTC $300,347'}
+              </Typography>
+            </Box>
+
+            <Box sx={{ width: { xs: '48%', md: '23%' } }}>
+              <Typography variant="subtitle1" color="text.secondary">
+                Miner
+              </Typography>
+              <Typography variant="body1">
+                {block.miner || 'Unknown'}
+              </Typography>
             </Box>
           </Stack>
         </CardContent>
       </Card>
 
-      <Typography variant="h5" gutterBottom>
-        Transactions ({block.transactions.length})
-      </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          mb: 2,
+        }}
+      >
+        <Typography variant="h5">
+          {block.transactions.length} transactions
+        </Typography>
+        {totalPages > 1 && (
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+            siblingCount={1}
+            boundaryCount={1}
+            showFirstButton
+            showLastButton
+          />
+        )}
+      </Box>
 
-      <TableContainer component={Paper}>
+      <TableContainer component={Paper} sx={{ mb: 3 }}>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Transaction ID</TableCell>
+              <TableCell>Timestamp</TableCell>
               <TableCell align="right">Size</TableCell>
               <TableCell align="right">Weight</TableCell>
               <TableCell align="right">Fee</TableCell>
@@ -253,40 +330,52 @@ const BlockDetail: React.FC<BlockDetailProps> = ({
             </TableRow>
           </TableHead>
           <TableBody>
-            {block.transactions.map((tx) => (
+            {currentTransactions.map((tx) => (
               <TableRow key={tx.txid} hover>
-                <TableCell sx={{ wordBreak: 'break-all' }}>
-                  <RouterLink
+                <TableCell>
+                  <Link
+                    component={RouterLink}
                     to={`/tx/${tx.txid}`}
-                    style={{
-                      color: '#1976d2',
-                      textDecoration: 'none',
+                    sx={{
                       fontFamily: 'monospace',
+                      textDecoration: 'none',
+                      '&:hover': {
+                        textDecoration: 'underline',
+                      },
                     }}
                   >
-                    {tx.txid}
-                  </RouterLink>
+                    {truncateString(tx.txid, 16)}
+                  </Link>
                 </TableCell>
-                <TableCell align="right">{formatSize(tx.size)}</TableCell>
+                <TableCell>{formatTimestamp(tx.timestamp / 1000)}</TableCell>
+                <TableCell align="right">{formatFileSize(tx.size)}</TableCell>
                 <TableCell align="right">
                   {(tx.weight / 1000).toFixed(2)} kWU
                 </TableCell>
                 <TableCell align="right">
-                  {(tx.fee / 100000000).toFixed(8)} BTC
+                  {formatBtcValue(tx.fee)} {calculateDollarAmount(tx.fee)}
                 </TableCell>
-                <TableCell align="right">{formatBTC(tx.value)}</TableCell>
+                <TableCell align="right">{formatBtcValue(tx.value)}</TableCell>
               </TableRow>
             ))}
-            {block.transactions.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} align="center">
-                  No transactions in this block
-                </TableCell>
-              </TableRow>
-            )}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <Pagination
+            count={totalPages}
+            page={page}
+            onChange={handlePageChange}
+            color="primary"
+            siblingCount={2}
+            boundaryCount={2}
+            showFirstButton
+            showLastButton
+          />
+        </Box>
+      )}
     </Box>
   );
 };

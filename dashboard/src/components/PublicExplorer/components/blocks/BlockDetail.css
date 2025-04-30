@@ -80,3 +80,127 @@
   padding: 40px;
   color: #dc3545;
 }
+
+/* Pagination styles */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+/* Transaction table styles */
+.transaction-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.transaction-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  text-align: left;
+  padding: 12px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.transaction-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.transaction-table tr:hover {
+  background-color: #f8f9fa;
+}
+
+.txid-link {
+  font-family: monospace;
+  color: #007bff;
+  text-decoration: none;
+}
+
+.txid-link:hover {
+  text-decoration: underline;
+}
+
+.fee-value {
+  font-family: monospace;
+  font-weight: 500;
+}
+
+.usd-value {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-left: 5px;
+}
+
+.fee-rate-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  font-weight: 500;
+  background-color: #f0f0f0;
+}
+
+.fee-rate-high {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.fee-rate-medium {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.fee-rate-low {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Miner logo and name */
+.miner-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.miner-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Health indicator */
+.health-indicator {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+
+.health-good {
+  background-color: #28a745;
+}
+
+.health-medium {
+  background-color: #ffc107;
+}
+
+.health-poor {
+  background-color: #dc3545;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .block-info {
+    grid-template-columns: 1fr;
+  }
+
+  .transaction-table th:nth-child(3),
+  .transaction-table td:nth-child(3),
+  .transaction-table th:nth-child(5),
+  .transaction-table td:nth-child(5) {
+    display: none;
+  }
+}

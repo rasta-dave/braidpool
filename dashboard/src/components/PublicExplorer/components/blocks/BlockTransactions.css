@@ -106,3 +106,93 @@
   margin: 20px;
   padding: 20px;
 }
+
+/* Pagination styles */
+.pagination-container {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0 10px;
+}
+
+/* Fee rate visualization */
+.fee-rate {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+
+.fee-rate-high {
+  background-color: #d4edda;
+  color: #155724;
+}
+
+.fee-rate-medium {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+.fee-rate-low {
+  background-color: #f8d7da;
+  color: #721c24;
+}
+
+/* Dollar amount display */
+.usd-value {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-left: 4px;
+}
+
+/* Page navigation buttons */
+.page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 20px;
+  gap: 5px;
+}
+
+.page-button {
+  padding: 5px 10px;
+  margin: 0 2px;
+  border: 1px solid #dee2e6;
+  background-color: #fff;
+  color: #007bff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-button:hover {
+  background-color: #f8f9fa;
+  border-color: #007bff;
+}
+
+.page-button.active {
+  background-color: #007bff;
+  color: #fff;
+  border-color: #007bff;
+}
+
+.page-button.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .transaction-row {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+
+  .table-header {
+    grid-template-columns: 2fr 1fr 1fr 1fr;
+  }
+
+  .col-size,
+  .col-inout {
+    display: none;
+  }
+}

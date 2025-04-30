@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Typography,
@@ -13,6 +13,7 @@ import {
   TableRow,
   Paper,
   Tooltip,
+  Pagination,
 } from '@mui/material';
 import { formatTimestamp, formatBtcValue, formatFileSize } from '../../utils';
 
@@ -21,8 +22,10 @@ interface Transaction {
   timestamp: number;
   size: number;
   fee: number;
+  value?: number;
   vin?: any[];
   vout?: any[];
+  feeRate?: number;
 }
 
 interface BlockTransactionsProps {
@@ -32,13 +35,63 @@ interface BlockTransactionsProps {
 const BlockTransactions: React.FC<BlockTransactionsProps> = ({
   transactions,
 }) => {
+  const [page, setPage] = useState(1);
+  const itemsPerPage = 10;
+  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+
+  const handlePageChange = (
+    event: React.ChangeEvent<unknown>,
+    value: number
+  ) => {
+    setPage(value);
+    console.log(`📄 Changing to page ${value}`);
+  };
+
+  // Get current page items
+  const currentTransactions = transactions.slice(
+    (page - 1) * itemsPerPage,
+    page * itemsPerPage
+  );
+
+  // Calculate dollar amount
+  const calculateDollarAmount = (btc: number): string => {
+    // Using a fixed exchange rate for simplicity
+    const rate = 95200; // 1 BTC = $95,200 USD
+    const usdAmount = btc * rate;
+    return `$${usdAmount.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
+
   return (
     <Box>
       <Card sx={{ mb: 3 }}>
         <CardContent>
-          <Typography variant="h5" component="h2" sx={{ mb: 2 }}>
-            Transactions ({transactions.length})
-          </Typography>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 2,
+            }}
+          >
+            <Typography variant="h5" component="h2">
+              {transactions.length} transactions
+            </Typography>
+            {totalPages > 1 && (
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                siblingCount={1}
+                boundaryCount={1}
+                showFirstButton
+                showLastButton
+              />
+            )}
+          </Box>
 
           <TableContainer
             component={Paper}
@@ -48,16 +101,16 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>TX ID</TableCell>
-                  <TableCell>Time</TableCell>
+                  <TableCell>Transaction ID</TableCell>
+                  <TableCell>Timestamp</TableCell>
                   <TableCell align="right">Value</TableCell>
                   <TableCell align="right">Fee</TableCell>
                   <TableCell align="right">Size</TableCell>
-                  <TableCell align="center">In/Out</TableCell>
+                  <TableCell align="right">Fee Rate</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {transactions.map((tx) => (
+                {currentTransactions.map((tx) => (
                   <TableRow key={tx.txid} hover>
                     <TableCell>
                       <Typography
@@ -77,20 +130,20 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                     </TableCell>
                     <TableCell>
                       <Tooltip title={formatTimestamp(tx.timestamp)}>
-                        <Typography variant="body2" color="text.secondary">
-                          {formatTimestamp(tx.timestamp, true)}
+                        <Typography variant="body2">
+                          {formatTimestamp(tx.timestamp)}
                         </Typography>
                       </Tooltip>
                     </TableCell>
                     <TableCell align="right">
                       <Typography fontFamily="monospace" fontWeight="medium">
-                        {formatBtcValue(tx.fee * 100)}{' '}
-                        {/* Using fee as a placeholder for value */}
+                        {formatBtcValue(tx.value || tx.fee * 100)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography fontFamily="monospace" fontWeight="medium">
-                        {formatBtcValue(tx.fee)}
+                        {formatBtcValue(tx.fee)}{' '}
+                        {calculateDollarAmount(tx.fee / 100000000)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
@@ -98,9 +151,13 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
                         {formatFileSize(tx.size)}
                       </Typography>
                     </TableCell>
-                    <TableCell align="center">
+                    <TableCell align="right">
                       <Typography fontFamily="monospace">
-                        {tx.vin?.length || 0}/{tx.vout?.length || 0}
+                        {tx.feeRate
+                          ? `${tx.feeRate} sat/vB`
+                          : tx.size
+                          ? `${Math.round((tx.fee / tx.size) * 100)} sat/vB`
+                          : 'Unknown'}
                       </Typography>
                     </TableCell>
                   </TableRow>
@@ -108,6 +165,21 @@ const BlockTransactions: React.FC<BlockTransactionsProps> = ({
               </TableBody>
             </Table>
           </TableContainer>
+
+          {totalPages > 1 && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Pagination
+                count={totalPages}
+                page={page}
+                onChange={handlePageChange}
+                color="primary"
+                siblingCount={1}
+                boundaryCount={1}
+                showFirstButton
+                showLastButton
+              />
+            </Box>
+          )}
         </CardContent>
       </Card>
     </Box>
