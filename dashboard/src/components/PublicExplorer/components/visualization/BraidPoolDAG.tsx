@@ -8,6 +8,7 @@ import CardTitle from '@mui/material/Typography';
 import '../../PublicExplorer.css';
 import Button from '@mui/material/Button';
 import { CircularProgress } from '@mui/material';
+import BraidPoolDAGControls from './BraidPoolDAGControls';
 
 interface GraphNode {
   id: string;
@@ -46,12 +47,26 @@ const BraidPoolDAG: React.FC = () => {
     `rgba(${231}, ${41}, ${138}, 1)`,
   ];
 
+  // Filter state
+  const [showHWPOnly, setShowHWPOnly] = useState(false);
+  const [highlightOrphans, setHighlightOrphans] = useState(false);
+  const [colorMode, setColorMode] = useState<'cohort' | 'age' | 'value'>(
+    'cohort'
+  );
+  const [paused, setPaused] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(5);
+
   const [nodeIdMap, setNodeIdMap] = useState<NodeIdMapping>({});
   const [selectedCohorts, setSelectedCohorts] = useState<number | 'all'>(10);
+
+  // Simulated values for age and value coloring modes
+  const [nodeAges, setNodeAges] = useState<Record<string, number>>({});
+  const [nodeValues, setNodeValues] = useState<Record<string, number>>({});
 
   const nodeRadius = 20;
   const margin = { top: 0, right: 0, bottom: 0, left: 50 };
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const COLUMN_WIDTH = 80;
   const VERTICAL_SPACING = 60;
@@ -188,12 +203,47 @@ const BraidPoolDAG: React.FC = () => {
     null
   );
 
+  // Generate simulated values for age and value based on node position in the graph
+  const generateSimulatedValues = (graphData: GraphData) => {
+    if (!graphData) return;
+
+    const ages: Record<string, number> = {};
+    const values: Record<string, number> = {};
+    const hwPath = graphData.highest_work_path;
+    const maxIndex = hwPath.length - 1;
+
+    // Generate ages (older nodes have higher ages)
+    hwPath.forEach((nodeId, index) => {
+      // Normalize to 0-1 range
+      ages[nodeId] = 1 - index / maxIndex;
+    });
+
+    // Generate some random values for remaining nodes
+    Object.keys(graphData.parents).forEach((nodeId) => {
+      if (!ages[nodeId]) {
+        // For non-hwp nodes, use a position-based heuristic or just randomize
+        ages[nodeId] = Math.random() * 0.7; // Keep non-hwp nodes younger on average
+      }
+
+      // For values, use a different distribution
+      const isHWP = hwPath.includes(nodeId);
+      values[nodeId] = isHWP
+        ? 0.5 + Math.random() * 0.5 // HWP nodes are more valuable
+        : Math.random() * 0.8;
+    });
+
+    setNodeAges(ages);
+    setNodeValues(values);
+  };
+
   useEffect(() => {
+    if (paused) return;
+
     const url = 'ws://localhost:65433/';
     const socket = new WebSocket(url);
 
     socket.onopen = () => {
-      console.log('Connected to WebSocket', url);
+      console.log('🔌 Connected to WebSocket', url);
       setConnectionStatus('Connected');
     };
 
@@ -210,7 +260,7 @@ const BraidPoolDAG: React.FC = () => {
         const parsed = JSON.parse(event.data);
         const parsedData = parsed.data;
         if (!parsedData?.parents || typeof parsedData.parents !== 'object') {
-          console.warn("Invalid 'parents' field in parsedData:", parsedData);
+          console.warn("⚠️ Invalid 'parents' field in parsedData:", parsedData);
           return;
         }
 
@@ -257,15 +307,16 @@ const BraidPoolDAG: React.FC = () => {
         );
         setHwpLength(parsedData.highest_work_path.length);
         setLoading(false);
+        generateSimulatedValues(graphData);
       } catch (err) {
         setError('Error processing graph data: ');
-        console.error('Error processing graph data:', err);
+        console.error('🔴 Error processing graph data:', err);
         setLoading(false);
       }
     };
 
     return () => socket.close();
-  }, []);
+  }, [paused]); // Re-run when paused changes
 
   const resetZoom = () => {
     if (svgRef.current && zoomBehavior.current) {
@@ -277,6 +328,17 @@ const BraidPoolDAG: React.FC = () => {
           d3.zoomIdentity.scale(defaultZoom)
         );
     }
+  };
+
+  // Color scales for different color modes
+  const getAgeColor = (age: number) => {
+    // From yellow (newer) to red (older)
+    return d3.interpolateYlOrRd(age);
+  };
+
+  const getValueColor = (value: number) => {
+    // From light blue (lower value) to dark blue (higher value)
+    return d3.interpolateBlues(value);
   };
 
   useEffect(() => {
@@ -373,9 +435,11 @@ const BraidPoolDAG: React.FC = () => {
             positions[d.id]?.y || 0
           })`
       )
-      .style('display', (d) =>
-        filteredCohortNodes.has(d.id) ? 'inline' : 'none'
-      );
+      .style('display', (d) => {
+        if (!filteredCohortNodes.has(d.id)) return 'none';
+        if (showHWPOnly && !hwPathSet.has(d.id)) return 'none';
+        return 'inline';
+      });
 
     const cohortMap = new Map<string, number>();
     (cohorts as string[][]).forEach((cohort, index) => {
@@ -386,25 +450,50 @@ const BraidPoolDAG: React.FC = () => {
       .append('circle')
       .attr('r', nodeRadius)
       .attr('fill', (d) => {
-        const cohortIndex = cohortMap.get(d.id);
-        if (cohortIndex === undefined) return COLORS[0];
-        const startingIndex = Math.max(
-          0,
-          totalCohorts -
-            (typeof selectedCohorts === 'number'
-              ? selectedCohorts
-              : totalCohorts)
-        );
-        const adjustedIndex = cohortIndex - startingIndex;
-        return COLORS[adjustedIndex % COLORS.length];
+        // Apply different coloring based on selected colorMode
+        if (colorMode === 'cohort') {
+          const cohortIndex = cohortMap.get(d.id);
+          if (cohortIndex === undefined) return COLORS[0];
+          const startingIndex = Math.max(
+            0,
+            totalCohorts -
+              (typeof selectedCohorts === 'number'
+                ? selectedCohorts
+                : totalCohorts)
+          );
+          const adjustedIndex = cohortIndex - startingIndex;
+          return COLORS[adjustedIndex % COLORS.length];
+        } else if (colorMode === 'age') {
+          return getAgeColor(nodeAges[d.id] || 0);
+        } else if (colorMode === 'value') {
+          return getValueColor(nodeValues[d.id] || 0);
+        }
+        return COLORS[0];
       })
-      .attr('stroke', '#fff')
-      .attr('stroke-width', 2)
+      .attr('stroke', (d) => {
+        // Highlight specific node types based on filters
+        if (highlightOrphans && (!d.children || d.children.length === 0))
+          return '#FF0000';
+        if (hwPathSet.has(d.id)) return '#FF8500';
+        return '#fff';
+      })
+      .attr('stroke-width', (d) => {
+        // Make highlighted nodes have thicker borders
+        if (highlightOrphans && (!d.children || d.children.length === 0))
+          return 3;
+        if (hwPathSet.has(d.id)) return 3;
+        return 2;
+      })
+      .attr('opacity', (d) => {
+        if (showHWPOnly && !hwPathSet.has(d.id)) return 0.3;
+        return 1;
+      })
       .on('mouseover', function (event: MouseEvent, d: GraphNode) {
         d3.select(this).attr('stroke', '#FF8500').attr('stroke-width', 3);
 
         const cohortIndex = cohortMap.get(d.id);
         const isHWP = hwPathSet.has(d.id);
+        const isOrphan = !d.children || d.children.length === 0;
 
         const tooltipContent = `
                 <div><strong>ID:</strong> ${nodeIdMap[d.id] || '?'} (${
@@ -416,13 +505,20 @@ const BraidPoolDAG: React.FC = () => {
                 <div><strong>Highest Work Path:</strong> ${
                   isHWP ? 'Yes' : 'No'
                 }</div>
+                <div><strong>Orphan:</strong> ${isOrphan ? 'Yes' : 'No'}</div>
+                <div><strong>Age Value:</strong> ${(
+                  nodeAges[d.id] || 0
+                ).toFixed(2)}</div>
+                <div><strong>Value:</strong> ${(nodeValues[d.id] || 0).toFixed(
+                  2
+                )}</div>
                 <div><strong>Parents:</strong> ${
                   d.parents.length > 0
                     ? d.parents.map((p) => `${nodeIdMap[p] || '?'}`).join(', ')
                     : 'None'
                 }</div>
                 <div><strong>Children:</strong> ${
-                  d.children.length > 0
+                  d.children && d.children.length > 0
                     ? d.children.map((c) => `${nodeIdMap[c] || '?'}`).join(', ')
                     : 'None'
                 }</div>
@@ -431,7 +527,19 @@ const BraidPoolDAG: React.FC = () => {
         tooltip.html(tooltipContent).style('visibility', 'visible');
       })
       .on('mouseout', function () {
-        d3.select(this).attr('stroke', '#fff').attr('stroke-width', 2);
+        d3.select(this)
+          .attr('stroke', (d: any) => {
+            if (highlightOrphans && (!d.children || d.children.length === 0))
+              return '#FF0000';
+            if (hwPathSet.has(d.id)) return '#FF8500';
+            return '#fff';
+          })
+          .attr('stroke-width', (d: any) => {
+            if (highlightOrphans && (!d.children || d.children.length === 0))
+              return 3;
+            if (hwPathSet.has(d.id)) return 3;
+            return 2;
+          });
         tooltip.style('visibility', 'hidden');
       });
 
@@ -442,36 +550,8 @@ const BraidPoolDAG: React.FC = () => {
       .text((d) => nodeIdMap[d.id] || '?')
       .attr('fill', '#fff')
       .style('font-size', 14)
-      .on('mouseover', function (event: MouseEvent, d: GraphNode) {
-        const cohortIndex = cohortMap.get(d.id);
-        const isHWP = hwPathSet.has(d.id);
-        const tooltipContent = `
-                <div><strong>ID:</strong> ${nodeIdMap[d.id] || '?'} (${
-          d.id
-        })</div>
-                <div><strong>Cohort:</strong> ${
-                  cohortIndex !== undefined ? cohortIndex : 'N/A'
-                }</div>
-                <div><strong>Highest Work Path:</strong> ${
-                  isHWP ? 'Yes' : 'No'
-                }</div>
-                <div><strong>Parents:</strong> ${
-                  d.parents.length > 0
-                    ? d.parents.map((p) => `${nodeIdMap[p] || '?'}`).join(', ')
-                    : 'None'
-                }</div>
-                <div><strong>Children:</strong> ${
-                  d.children.length > 0
-                    ? d.children.map((c) => `${nodeIdMap[c] || '?'}`).join(', ')
-                    : 'None'
-                }</div>
-                `;
+      .style('pointer-events', 'none'); // Prevent text from intercepting mouse events
 
-        tooltip.html(tooltipContent).style('visibility', 'visible');
-      })
-      .on('mouseout', function () {
-        tooltip.style('visibility', 'hidden');
-      });
     container
       .append('text')
       .attr('x', width / 2)
@@ -576,12 +656,40 @@ const BraidPoolDAG: React.FC = () => {
           ? 'url(#arrow-orange)'
           : 'url(#arrow-blue)'
       )
-      .style('display', (d) =>
-        filteredCohortNodes.has(d.source) && filteredCohortNodes.has(d.target)
-          ? 'inline'
-          : 'none'
-      );
-  }, [graphData, defaultZoom, selectedCohorts]);
+      .style('display', (d) => {
+        if (
+          !filteredCohortNodes.has(d.source) ||
+          !filteredCohortNodes.has(d.target)
+        ) {
+          return 'none';
+        }
+        if (
+          showHWPOnly &&
+          (!hwPathSet.has(d.source) || !hwPathSet.has(d.target))
+        ) {
+          return 'none';
+        }
+        return 'inline';
+      })
+      .style('opacity', (d) => {
+        if (
+          showHWPOnly &&
+          (!hwPathSet.has(d.source) || !hwPathSet.has(d.target))
+        ) {
+          return 0.3;
+        }
+        return 1;
+      });
+  }, [
+    graphData,
+    defaultZoom,
+    selectedCohorts,
+    showHWPOnly,
+    highlightOrphans,
+    colorMode,
+    nodeAges,
+    nodeValues,
+  ]);
 
   if (loading) {
     return (
@@ -647,6 +755,7 @@ const BraidPoolDAG: React.FC = () => {
       </div>
 
       <div
+        ref={containerRef}
         style={{
           position: 'relative',
           display: 'flex',
@@ -654,10 +763,26 @@ const BraidPoolDAG: React.FC = () => {
           alignItems: 'center',
         }}
       >
+        <BraidPoolDAGControls
+          showHWPOnly={showHWPOnly}
+          setShowHWPOnly={setShowHWPOnly}
+          highlightOrphans={highlightOrphans}
+          setHighlightOrphans={setHighlightOrphans}
+          colorMode={colorMode}
+          setColorMode={setColorMode}
+          paused={paused}
+          setPaused={setPaused}
+          animationSpeed={animationSpeed}
+          setAnimationSpeed={setAnimationSpeed}
+        />
+
         <Card
           style={{
-            borderColor: '#FF8500',
             width: '100%',
+            boxShadow: 'none',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            border: 'none',
           }}
         >
           <CardContent
