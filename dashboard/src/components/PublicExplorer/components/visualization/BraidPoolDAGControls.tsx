@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ConnectivityType } from './ConnectivityUtils';
 import { EdgeType } from './EdgeUtils';
 
@@ -72,6 +72,50 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [showColorLegend, setShowColorLegend] = useState(false);
 
+  // State for draggable color legend
+  const [legendPosition, setLegendPosition] = useState({ x: 250, y: 10 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const legendRef = useRef<HTMLDivElement>(null);
+
+  // Handle mouse events for dragging
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (legendRef.current) {
+      const rect = legendRef.current.getBoundingClientRect();
+      setDragOffset({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+      setIsDragging(true);
+    }
+  };
+
+  // Effect for global mouse move/up events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setLegendPosition({
+          x: e.clientX - dragOffset.x,
+          y: e.clientY - dragOffset.y,
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
   // Array of cohort colors used in the visualization
   const cohortColors = [
     { color: 'rgba(217, 95, 2, 1)', label: 'Cohort 1 - Most recent group' },
@@ -96,10 +140,11 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   // Color legend panel component
   const ColorLegendPanel = () => (
     <div
+      ref={legendRef}
       style={{
         position: 'fixed',
-        right: '250px',
-        top: '10px',
+        left: `${legendPosition.x}px`,
+        top: `${legendPosition.y}px`,
         width: '300px',
         backgroundColor: 'rgba(0,0,0,0.8)',
         borderRadius: '8px',
@@ -107,10 +152,11 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
         boxShadow: '0 4px 8px rgba(0,0,0,0.3)',
         zIndex: 1001,
         color: 'white',
-        transition: 'opacity 0.3s, transform 0.3s',
+        transition: isDragging ? 'none' : 'opacity 0.3s, transform 0.3s',
         opacity: showColorLegend ? 1 : 0,
         transform: showColorLegend ? 'translateY(0)' : 'translateY(-10px)',
         pointerEvents: showColorLegend ? 'auto' : 'none',
+        cursor: isDragging ? 'grabbing' : 'grab',
       }}
     >
       <div
@@ -119,24 +165,44 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: '12px',
+          cursor: 'grab',
+          userSelect: 'none',
         }}
+        onMouseDown={handleMouseDown}
       >
         <h5 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>
-          Color Legend
+          Color Legend{' '}
+          <span style={{ fontSize: '10px', color: '#ccc' }}>
+            (drag to move)
+          </span>
         </h5>
-        <button
-          onClick={() => setShowColorLegend(false)}
+
+        {/* Close button - implemented as a div with better styling */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowColorLegend(false);
+            console.log('Close button clicked'); // Debug
+          }}
           style={{
-            background: 'transparent',
-            border: 'none',
+            width: '20px',
+            height: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '50%',
             color: '#fff',
             cursor: 'pointer',
-            fontSize: '16px',
-            padding: '0',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            zIndex: 1002, // Higher than parent
+            marginLeft: '8px', // Space from other header elements
           }}
+          onMouseDown={(e) => e.stopPropagation()} // Prevent drag from starting
         >
           ×
-        </button>
+        </div>
       </div>
 
       <div style={{ marginBottom: '12px' }}>
