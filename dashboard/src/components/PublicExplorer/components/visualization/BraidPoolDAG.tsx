@@ -15,6 +15,13 @@ import {
   filterNodesByConnectivity,
   findBridgeNodes,
 } from './ConnectivityUtils';
+import {
+  EdgeType,
+  calculateEdgeStats,
+  filterEdgesByType,
+  buildCohortMap,
+  Edge,
+} from './EdgeUtils';
 
 // Define interfaces locally to avoid import issues
 interface GraphNode {
@@ -271,6 +278,16 @@ const BraidPoolDAG: React.FC = () => {
     setNodeValues(values);
   };
 
+  // New edge filter state
+  const [edgeFilter, setEdgeFilter] = useState<EdgeType>(EdgeType.ALL);
+  const [edgeStats, setEdgeStats] = useState({
+    intraCohort: 0,
+    crossCohort: 0,
+    hwp: 0,
+    bridge: 0,
+    total: 0,
+  });
+
   useEffect(() => {
     if (paused) return;
 
@@ -345,8 +362,12 @@ const BraidPoolDAG: React.FC = () => {
         calculateNodeValues(graphData);
 
         // Calculate connectivity stats
-        const stats = calculateConnectivityStats(graphData);
-        setConnectivityStats(stats);
+        const connectStats = calculateConnectivityStats(graphData);
+        setConnectivityStats(connectStats);
+
+        // Calculate edge stats
+        const edgeStatistics = calculateEdgeStats(graphData);
+        setEdgeStats(edgeStatistics);
       } catch (err) {
         setError('Error processing graph data: ');
         console.error('🔴 Error processing graph data:', err);
@@ -408,6 +429,17 @@ const BraidPoolDAG: React.FC = () => {
     Array.from(connectivityFilteredNodes).forEach((nodeId) => {
       if (filteredCohortNodes.has(nodeId)) {
         visibleNodeIds.add(nodeId);
+      }
+    });
+
+    // Get filtered edges based on edge type
+    const filteredEdges = filterEdgesByType(graphData, edgeFilter);
+
+    // Create a set of visible edge IDs for fast lookup
+    const visibleEdgeMap = new Set<string>();
+    filteredEdges.forEach((edge) => {
+      if (visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)) {
+        visibleEdgeMap.add(`${edge.source}-${edge.target}`);
       }
     });
 
@@ -482,8 +514,11 @@ const BraidPoolDAG: React.FC = () => {
     allNodes.forEach((node) => {
       if (Array.isArray(node.children)) {
         node.children.forEach((childId) => {
-          // Only include links where both ends are visible
-          if (visibleNodeIds.has(childId)) {
+          // Only include links where both ends are visible and it passes the edge filter
+          if (
+            visibleNodeIds.has(childId) &&
+            visibleEdgeMap.has(`${node.id}-${childId}`)
+          ) {
             links.push({ target: node.id, source: childId });
           }
         });
@@ -773,7 +808,8 @@ const BraidPoolDAG: React.FC = () => {
     highlightOrphans,
     colorMode,
     nodeValues,
-    connectivityFilter, // Add connectivity filter as dependency
+    connectivityFilter,
+    edgeFilter, // Add edge filter as dependency
   ]);
 
   if (loading) {
@@ -832,6 +868,9 @@ const BraidPoolDAG: React.FC = () => {
           connectivityFilter={connectivityFilter}
           setConnectivityFilter={setConnectivityFilter}
           connectivityStats={connectivityStats}
+          edgeFilter={edgeFilter}
+          setEdgeFilter={setEdgeFilter}
+          edgeStats={edgeStats}
         />
 
         <Card

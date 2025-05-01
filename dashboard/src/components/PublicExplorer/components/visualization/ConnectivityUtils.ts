@@ -1,7 +1,7 @@
 /**
  * Main data structure for the braid/DAG
  */
-interface GraphData {
+export interface GraphData {
   highest_work_path: string[];
   parents: Record<string, string[]>;
   children: Record<string, string[]>;

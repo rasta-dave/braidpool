@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ConnectivityType } from './ConnectivityUtils';
+import { EdgeType } from './EdgeUtils';
 
 interface BraidPoolDAGControlsProps {
   showHWPOnly: boolean;
@@ -16,12 +17,21 @@ interface BraidPoolDAGControlsProps {
   setSelectedCohorts: (cohorts: number | 'all') => void;
   connectivityFilter: ConnectivityType;
   setConnectivityFilter: (type: ConnectivityType) => void;
+  edgeFilter: EdgeType;
+  setEdgeFilter: (type: EdgeType) => void;
   connectivityStats?: {
     orphans: number;
     roots: number;
     junctions: number;
     highDegree: number;
     bridges: number;
+    total: number;
+  };
+  edgeStats?: {
+    intraCohort: number;
+    crossCohort: number;
+    hwp: number;
+    bridge: number;
     total: number;
   };
 }
@@ -41,12 +51,21 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   setSelectedCohorts,
   connectivityFilter,
   setConnectivityFilter,
+  edgeFilter,
+  setEdgeFilter,
   connectivityStats = {
     orphans: 0,
     roots: 0,
     junctions: 0,
     highDegree: 0,
     bridges: 0,
+    total: 0,
+  },
+  edgeStats = {
+    intraCohort: 0,
+    crossCohort: 0,
+    hwp: 0,
+    bridge: 0,
     total: 0,
   },
 }) => {
@@ -112,10 +131,11 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
                 padding: '5px',
                 borderRadius: '4px',
                 border: '1px solid #0077B6',
-                backgroundColor: 'rgba(0,0,0,0.4)',
+                backgroundColor: 'rgba(0,0,0,0.7)',
                 color: '#fff',
                 fontSize: '12px',
                 marginBottom: '8px',
+                width: '100%',
               }}
             >
               <option value={ConnectivityType.ALL}>
@@ -135,6 +155,58 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               </option>
               <option value={ConnectivityType.BRIDGE}>
                 Bridges - Connect Cohorts ({connectivityStats.bridges})
+              </option>
+            </select>
+          </div>
+
+          <h5
+            style={{
+              color: '#fff',
+              margin: '0 0 10px 0',
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }}
+          >
+            Edge Type Filter
+          </h5>
+
+          <div
+            className="edge-filters"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              marginBottom: '15px',
+            }}
+          >
+            <select
+              value={edgeFilter}
+              onChange={(e) => setEdgeFilter(e.target.value as EdgeType)}
+              style={{
+                padding: '5px',
+                borderRadius: '4px',
+                border: '1px solid #0077B6',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: '#fff',
+                fontSize: '12px',
+                marginBottom: '8px',
+                width: '100%',
+              }}
+            >
+              <option value={EdgeType.ALL}>
+                All Connections ({edgeStats.total})
+              </option>
+              <option value={EdgeType.INTRA_COHORT}>
+                Within Same Cohort ({edgeStats.intraCohort})
+              </option>
+              <option value={EdgeType.CROSS_COHORT}>
+                Between Different Cohorts ({edgeStats.crossCohort})
+              </option>
+              <option value={EdgeType.HWP}>
+                Highest Work Path ({edgeStats.hwp})
+              </option>
+              <option value={EdgeType.BRIDGE}>
+                Bridge Connections ({edgeStats.bridge})
               </option>
             </select>
           </div>
@@ -178,7 +250,7 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
                   padding: '5px',
                   borderRadius: '4px',
                   border: '1px solid #0077B6',
-                  backgroundColor: 'rgba(0,0,0,0.4)',
+                  backgroundColor: 'rgba(0,0,0,0.7)',
                   color: '#fff',
                   fontSize: '12px',
                 }}
