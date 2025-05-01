@@ -5,8 +5,8 @@ interface BraidPoolDAGControlsProps {
   setShowHWPOnly: (show: boolean) => void;
   highlightOrphans: boolean;
   setHighlightOrphans: (highlight: boolean) => void;
-  colorMode: 'cohort' | 'age' | 'value';
-  setColorMode: (mode: 'cohort' | 'age' | 'value') => void;
+  colorMode: 'cohort' | 'value';
+  setColorMode: (mode: 'cohort' | 'value') => void;
   paused: boolean;
   setPaused: (paused: boolean) => void;
   animationSpeed: number;
@@ -175,23 +175,6 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
           <button
             style={{
               background:
-                colorMode === 'age' ? '#FF8500' : 'rgba(255,255,255,0.1)',
-              color: '#fff',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '12px',
-              transition: 'all 0.2s',
-            }}
-            onClick={() => setColorMode('age')}
-          >
-            Age
-          </button>
-
-          <button
-            style={{
-              background:
                 colorMode === 'value' ? '#FF8500' : 'rgba(255,255,255,0.1)',
               color: '#fff',
               border: 'none',
@@ -248,19 +231,10 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
           opacity: isHovered ? 0 : 1,
           transition: 'all 0.3s ease',
           background: 'rgba(0,119,182,0.7)',
-          transform: isHovered ? 'scale(0)' : 'scale(1)',
-          transformOrigin: 'right top',
         }}
       >
-        <span
-          style={{
-            color: '#fff',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          Filter Controls
+        <span style={{ color: '#fff', fontWeight: 'bold', fontSize: '12px' }}>
+          Filters
         </span>
       </div>
     </div>

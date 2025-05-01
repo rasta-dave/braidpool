@@ -50,16 +50,14 @@ const BraidPoolDAG: React.FC = () => {
   // Filter state
   const [showHWPOnly, setShowHWPOnly] = useState(false);
   const [highlightOrphans, setHighlightOrphans] = useState(false);
-  const [colorMode, setColorMode] = useState<'cohort' | 'age' | 'value'>(
-    'cohort'
-  );
+  const [colorMode, setColorMode] = useState<'cohort' | 'value'>('cohort');
   const [paused, setPaused] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(5);
 
   const [nodeIdMap, setNodeIdMap] = useState<NodeIdMapping>({});
   const [selectedCohorts, setSelectedCohorts] = useState<number | 'all'>(10);
 
-  // Simulated values for age and value coloring modes
+  // Simulated values for value coloring mode
   const [nodeAges, setNodeAges] = useState<Record<string, number>>({});
   const [nodeValues, setNodeValues] = useState<Record<string, number>>({});
 
@@ -203,36 +201,26 @@ const BraidPoolDAG: React.FC = () => {
     null
   );
 
-  // Generate simulated values for age and value based on node position in the graph
+  // Generate simulated values for value based on node position in the graph
   const generateSimulatedValues = (graphData: GraphData) => {
     if (!graphData) return;
 
-    const ages: Record<string, number> = {};
     const values: Record<string, number> = {};
     const hwPath = graphData.highest_work_path;
     const maxIndex = hwPath.length - 1;
 
-    // Generate ages (older nodes have higher ages)
+    // Generate values for hwp nodes
     hwPath.forEach((nodeId, index) => {
-      // Normalize to 0-1 range
-      ages[nodeId] = 1 - index / maxIndex;
+      values[nodeId] = 0.5 + Math.random() * 0.5; // HWP nodes are more valuable
     });
 
-    // Generate some random values for remaining nodes
+    // Generate values for remaining nodes
     Object.keys(graphData.parents).forEach((nodeId) => {
-      if (!ages[nodeId]) {
-        // For non-hwp nodes, use a position-based heuristic or just randomize
-        ages[nodeId] = Math.random() * 0.7; // Keep non-hwp nodes younger on average
+      if (!values[nodeId]) {
+        values[nodeId] = Math.random() * 0.8;
       }
-
-      // For values, use a different distribution
-      const isHWP = hwPath.includes(nodeId);
-      values[nodeId] = isHWP
-        ? 0.5 + Math.random() * 0.5 // HWP nodes are more valuable
-        : Math.random() * 0.8;
     });
 
-    setNodeAges(ages);
     setNodeValues(values);
   };
 
@@ -331,11 +319,6 @@ const BraidPoolDAG: React.FC = () => {
   };
 
   // Color scales for different color modes
-  const getAgeColor = (age: number) => {
-    // From yellow (newer) to red (older)
-    return d3.interpolateYlOrRd(age);
-  };
-
   const getValueColor = (value: number) => {
     // From light blue (lower value) to dark blue (higher value)
     return d3.interpolateBlues(value);
@@ -463,8 +446,6 @@ const BraidPoolDAG: React.FC = () => {
           );
           const adjustedIndex = cohortIndex - startingIndex;
           return COLORS[adjustedIndex % COLORS.length];
-        } else if (colorMode === 'age') {
-          return getAgeColor(nodeAges[d.id] || 0);
         } else if (colorMode === 'value') {
           return getValueColor(nodeValues[d.id] || 0);
         }
@@ -506,9 +487,6 @@ const BraidPoolDAG: React.FC = () => {
                   isHWP ? 'Yes' : 'No'
                 }</div>
                 <div><strong>Orphan:</strong> ${isOrphan ? 'Yes' : 'No'}</div>
-                <div><strong>Age Value:</strong> ${(
-                  nodeAges[d.id] || 0
-                ).toFixed(2)}</div>
                 <div><strong>Value:</strong> ${(nodeValues[d.id] || 0).toFixed(
                   2
                 )}</div>
@@ -687,7 +665,6 @@ const BraidPoolDAG: React.FC = () => {
     showHWPOnly,
     highlightOrphans,
     colorMode,
-    nodeAges,
     nodeValues,
   ]);
 
