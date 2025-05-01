@@ -392,23 +392,8 @@ const BraidPoolDAG: React.FC = () => {
 
   // Color scales for different color modes
   const getValueColor = (value: number) => {
-    // Use a more vibrant and diverse color palette
-    if (value < 0.2) {
-      // Deep blue to light blue
-      return d3.interpolateViridis(value * 5);
-    } else if (value < 0.4) {
-      // Light blue to green
-      return d3.interpolateTurbo((value - 0.2) * 5);
-    } else if (value < 0.6) {
-      // Green to yellow
-      return d3.interpolateInferno((value - 0.4) * 5);
-    } else if (value < 0.8) {
-      // Yellow to orange
-      return d3.interpolatePlasma((value - 0.6) * 5);
-    } else {
-      // Orange to red (HWP nodes mostly fall here)
-      return d3.interpolateMagma((value - 0.8) * 5);
-    }
+    // Use a single continuous color scale for better usability
+    return d3.interpolateViridis(value);
   };
 
   useEffect(() => {
