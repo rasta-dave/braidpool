@@ -56,10 +56,10 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
     <div
       className="filter-panel"
       style={{
-        position: 'absolute',
+        position: 'fixed',
         top: '10px',
-        right: '10px',
-        zIndex: 10,
+        right: '20px',
+        zIndex: 1000,
         background: isHovered ? 'rgba(0,0,0,0.7)' : 'rgba(0,0,0,0.1)',
         padding: '15px',
         borderRadius: '8px',
@@ -68,6 +68,8 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
         transition: 'all 0.3s ease',
         opacity: isHovered ? 1 : 0.1,
         transform: isHovered ? 'translateX(0)' : 'translateX(10px)',
+        maxHeight: '95vh',
+        overflowY: 'auto',
       }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
