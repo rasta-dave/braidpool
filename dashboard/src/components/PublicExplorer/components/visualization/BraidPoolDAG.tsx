@@ -9,7 +9,14 @@ import '../../PublicExplorer.css';
 import Button from '@mui/material/Button';
 import { CircularProgress } from '@mui/material';
 import BraidPoolDAGControls from './BraidPoolDAGControls';
+import {
+  ConnectivityType,
+  calculateConnectivityStats,
+  filterNodesByConnectivity,
+  findBridgeNodes,
+} from './ConnectivityUtils';
 
+// Define interfaces locally to avoid import issues
 interface GraphNode {
   id: string;
   parents: string[];
@@ -53,12 +60,22 @@ const BraidPoolDAG: React.FC = () => {
   const [colorMode, setColorMode] = useState<'cohort' | 'value'>('cohort');
   const [paused, setPaused] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(5);
+  // New connectivity filter state
+  const [connectivityFilter, setConnectivityFilter] =
+    useState<ConnectivityType>(ConnectivityType.ALL);
+  const [connectivityStats, setConnectivityStats] = useState({
+    orphans: 0,
+    roots: 0,
+    junctions: 0,
+    highDegree: 0,
+    bridges: 0,
+    total: 0,
+  });
 
   const [nodeIdMap, setNodeIdMap] = useState<NodeIdMapping>({});
   const [selectedCohorts, setSelectedCohorts] = useState<number | 'all'>(10);
 
-  // Simulated values for value coloring mode
-  const [nodeAges, setNodeAges] = useState<Record<string, number>>({});
+  // Node values based on hash data
   const [nodeValues, setNodeValues] = useState<Record<string, number>>({});
 
   const nodeRadius = 20;
@@ -201,26 +218,56 @@ const BraidPoolDAG: React.FC = () => {
     null
   );
 
-  // Generate simulated values for value based on node position in the graph
-  const generateSimulatedValues = (graphData: GraphData) => {
+  // Calculate node values based on hash data
+  const calculateNodeValues = (graphData: GraphData) => {
     if (!graphData) return;
 
     const values: Record<string, number> = {};
-    const hwPath = graphData.highest_work_path;
-    const maxIndex = hwPath.length - 1;
+    const hwPathSet = new Set(graphData.highest_work_path);
 
-    // Generate values for hwp nodes
-    hwPath.forEach((nodeId, index) => {
-      values[nodeId] = 0.5 + Math.random() * 0.5; // HWP nodes are more valuable
-    });
-
-    // Generate values for remaining nodes
+    // Process all nodes to extract value from hash
     Object.keys(graphData.parents).forEach((nodeId) => {
-      if (!values[nodeId]) {
-        values[nodeId] = Math.random() * 0.8;
+      // Extract numeric value from the hash using different parts to increase entropy
+      // Use the full hash for better distribution of values
+      let numericValue = 0;
+
+      // Use multiple byte segments for better distribution
+      const segment1 = parseInt(nodeId.substring(0, 2), 16) / 255;
+      const segment2 = parseInt(nodeId.substring(2, 4), 16) / 255;
+      const segment3 = parseInt(nodeId.substring(4, 6), 16) / 255;
+
+      // Combine segments for more variety
+      numericValue = (segment1 + segment2 + segment3) / 3;
+
+      // Spread the values out more (amplify differences)
+      numericValue = Math.pow(numericValue, 0.7); // Apply a power function to spread values
+
+      // Boost HWP nodes for better visualization
+      if (hwPathSet.has(nodeId)) {
+        // Ensure HWP nodes are visually distinct
+        numericValue = 0.7 + numericValue * 0.3; // HWP nodes get 0.7-1.0 range
       }
+
+      values[nodeId] = numericValue;
     });
 
+    // Debug info - log distribution of values
+    const valueCounts = {
+      '0-0.2': 0,
+      '0.2-0.4': 0,
+      '0.4-0.6': 0,
+      '0.6-0.8': 0,
+      '0.8-1.0': 0,
+    };
+    Object.values(values).forEach((v) => {
+      if (v < 0.2) valueCounts['0-0.2']++;
+      else if (v < 0.4) valueCounts['0.2-0.4']++;
+      else if (v < 0.6) valueCounts['0.4-0.6']++;
+      else if (v < 0.8) valueCounts['0.6-0.8']++;
+      else valueCounts['0.8-1.0']++;
+    });
+
+    console.log('🎨 Value distribution:', valueCounts);
     setNodeValues(values);
   };
 
@@ -295,7 +342,11 @@ const BraidPoolDAG: React.FC = () => {
         );
         setHwpLength(parsedData.highest_work_path.length);
         setLoading(false);
-        generateSimulatedValues(graphData);
+        calculateNodeValues(graphData);
+
+        // Calculate connectivity stats
+        const stats = calculateConnectivityStats(graphData);
+        setConnectivityStats(stats);
       } catch (err) {
         setError('Error processing graph data: ');
         console.error('🔴 Error processing graph data:', err);
@@ -320,14 +371,45 @@ const BraidPoolDAG: React.FC = () => {
 
   // Color scales for different color modes
   const getValueColor = (value: number) => {
-    // From light blue (lower value) to dark blue (higher value)
-    return d3.interpolateBlues(value);
+    // Use a more vibrant and diverse color palette
+    if (value < 0.2) {
+      // Deep blue to light blue
+      return d3.interpolateViridis(value * 5);
+    } else if (value < 0.4) {
+      // Light blue to green
+      return d3.interpolateTurbo((value - 0.2) * 5);
+    } else if (value < 0.6) {
+      // Green to yellow
+      return d3.interpolateInferno((value - 0.4) * 5);
+    } else if (value < 0.8) {
+      // Yellow to orange
+      return d3.interpolatePlasma((value - 0.6) * 5);
+    } else {
+      // Orange to red (HWP nodes mostly fall here)
+      return d3.interpolateMagma((value - 0.8) * 5);
+    }
   };
 
   useEffect(() => {
     if (!svgRef.current || !graphData) return;
+
+    // Filter nodes based on selected cohorts
     const filteredCohorts = graphData.cohorts.slice(-selectedCohorts);
     const filteredCohortNodes = new Set(filteredCohorts.flat());
+
+    // Apply connectivity filter
+    const connectivityFilteredNodes = filterNodesByConnectivity(
+      graphData,
+      connectivityFilter
+    );
+
+    // Combine filters - a node must pass both filters to be visible
+    const visibleNodeIds = new Set<string>();
+    Array.from(connectivityFilteredNodes).forEach((nodeId) => {
+      if (filteredCohortNodes.has(nodeId)) {
+        visibleNodeIds.add(nodeId);
+      }
+    });
 
     const tooltip = d3
       .select(tooltipRef.current)
@@ -356,11 +438,13 @@ const BraidPoolDAG: React.FC = () => {
         container.attr('transform', event.transform.toString());
       });
 
-    const allNodes = Object.keys(graphData.parents).map((id) => ({
-      id,
-      parents: graphData.parents[id],
-      children: graphData.children[id],
-    }));
+    const allNodes = Object.keys(graphData.parents)
+      .filter((id) => visibleNodeIds.has(id)) // Only include visible nodes
+      .map((id) => ({
+        id,
+        parents: graphData.parents[id],
+        children: graphData.children[id],
+      }));
 
     const hwPath = graphData.highest_work_path;
     const cohorts = graphData.cohorts;
@@ -386,9 +470,7 @@ const BraidPoolDAG: React.FC = () => {
 
     const hwPathSet = new Set(hwPath);
 
-    const visibleNodes = allNodes.filter((node) =>
-      filteredCohortNodes.has(node.id)
-    );
+    const visibleNodes = allNodes.filter((node) => visibleNodeIds.has(node.id));
     let minVisibleX = Infinity;
     visibleNodes.forEach((node) => {
       const x = positions[node.id]?.x || 0;
@@ -400,7 +482,10 @@ const BraidPoolDAG: React.FC = () => {
     allNodes.forEach((node) => {
       if (Array.isArray(node.children)) {
         node.children.forEach((childId) => {
-          links.push({ target: node.id, source: childId });
+          // Only include links where both ends are visible
+          if (visibleNodeIds.has(childId)) {
+            links.push({ target: node.id, source: childId });
+          }
         });
       }
     });
@@ -419,7 +504,7 @@ const BraidPoolDAG: React.FC = () => {
           })`
       )
       .style('display', (d) => {
-        if (!filteredCohortNodes.has(d.id)) return 'none';
+        if (!visibleNodeIds.has(d.id)) return 'none';
         if (showHWPOnly && !hwPathSet.has(d.id)) return 'none';
         return 'inline';
       });
@@ -476,19 +561,44 @@ const BraidPoolDAG: React.FC = () => {
         const isHWP = hwPathSet.has(d.id);
         const isOrphan = !d.children || d.children.length === 0;
 
+        // Calculate hex value for display
+        const hexValue = d.id.substring(0, 16) + '...';
+        const numericValue = nodeValues[d.id] || 0;
+
+        // Connectivity information
+        const connectivityInfo = [];
+        if (d.parents.length === 0) connectivityInfo.push('Root');
+        if (d.children.length === 0) connectivityInfo.push('Orphan');
+        if (d.parents.length > 1 && d.children.length > 1)
+          connectivityInfo.push('Junction');
+        if (d.parents.length + d.children.length > 5)
+          connectivityInfo.push('High-Degree');
+
+        // Check if it's a bridge node
+        const bridgeNodes = findBridgeNodes(graphData);
+        if (bridgeNodes.has(d.id)) connectivityInfo.push('Bridge');
+
+        const connectivityString =
+          connectivityInfo.length > 0
+            ? connectivityInfo.join(', ')
+            : 'Standard';
+
         const tooltipContent = `
-                <div><strong>ID:</strong> ${nodeIdMap[d.id] || '?'} (${
-          d.id
-        })</div>
+                <div><strong>ID:</strong> ${
+                  nodeIdMap[d.id] || '?'
+                } (${hexValue})</div>
                 <div><strong>Cohort:</strong> ${
                   cohortIndex !== undefined ? cohortIndex : 'N/A'
                 }</div>
                 <div><strong>Highest Work Path:</strong> ${
                   isHWP ? 'Yes' : 'No'
                 }</div>
-                <div><strong>Orphan:</strong> ${isOrphan ? 'Yes' : 'No'}</div>
-                <div><strong>Value:</strong> ${(nodeValues[d.id] || 0).toFixed(
-                  2
+                <div><strong>Type:</strong> ${connectivityString}</div>
+                <div><strong>Connections:</strong> ${d.parents.length} in, ${
+          d.children.length
+        } out</div>
+                <div><strong>Hash Value:</strong> ${numericValue.toFixed(
+                  4
                 )}</div>
                 <div><strong>Parents:</strong> ${
                   d.parents.length > 0
@@ -635,10 +745,7 @@ const BraidPoolDAG: React.FC = () => {
           : 'url(#arrow-blue)'
       )
       .style('display', (d) => {
-        if (
-          !filteredCohortNodes.has(d.source) ||
-          !filteredCohortNodes.has(d.target)
-        ) {
+        if (!visibleNodeIds.has(d.source) || !visibleNodeIds.has(d.target)) {
           return 'none';
         }
         if (
@@ -666,6 +773,7 @@ const BraidPoolDAG: React.FC = () => {
     highlightOrphans,
     colorMode,
     nodeValues,
+    connectivityFilter, // Add connectivity filter as dependency
   ]);
 
   if (loading) {
@@ -721,6 +829,9 @@ const BraidPoolDAG: React.FC = () => {
           setAnimationSpeed={setAnimationSpeed}
           selectedCohorts={selectedCohorts}
           setSelectedCohorts={setSelectedCohorts}
+          connectivityFilter={connectivityFilter}
+          setConnectivityFilter={setConnectivityFilter}
+          connectivityStats={connectivityStats}
         />
 
         <Card

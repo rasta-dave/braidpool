@@ -2,7 +2,7 @@
 import asyncio
 import json
 import websockets
-from simulator import print_hash
+from tests.simulator.simulator import print_hash
 
 async def connect_to_server():
     uri = "ws://localhost:65433/ws"  # Note the /ws path

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ConnectivityType } from './ConnectivityUtils';
 
 interface BraidPoolDAGControlsProps {
   showHWPOnly: boolean;
@@ -13,6 +14,16 @@ interface BraidPoolDAGControlsProps {
   setAnimationSpeed: (speed: number) => void;
   selectedCohorts: number | 'all';
   setSelectedCohorts: (cohorts: number | 'all') => void;
+  connectivityFilter: ConnectivityType;
+  setConnectivityFilter: (type: ConnectivityType) => void;
+  connectivityStats?: {
+    orphans: number;
+    roots: number;
+    junctions: number;
+    highDegree: number;
+    bridges: number;
+    total: number;
+  };
 }
 
 const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
@@ -28,6 +39,16 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   setAnimationSpeed,
   selectedCohorts,
   setSelectedCohorts,
+  connectivityFilter,
+  setConnectivityFilter,
+  connectivityStats = {
+    orphans: 0,
+    roots: 0,
+    junctions: 0,
+    highDegree: 0,
+    bridges: 0,
+    total: 0,
+  },
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -54,6 +75,62 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
       <div
         style={{ opacity: isHovered ? 1 : 0, transition: 'opacity 0.3s ease' }}
       >
+        <h5
+          style={{
+            color: '#fff',
+            margin: '0 0 10px 0',
+            fontSize: '14px',
+            fontWeight: 'bold',
+          }}
+        >
+          Connectivity Filter
+        </h5>
+
+        <div
+          className="connectivity-filters"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            marginBottom: '15px',
+          }}
+        >
+          <select
+            value={connectivityFilter}
+            onChange={(e) =>
+              setConnectivityFilter(e.target.value as ConnectivityType)
+            }
+            style={{
+              padding: '5px',
+              borderRadius: '4px',
+              border: '1px solid #0077B6',
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              color: '#fff',
+              fontSize: '12px',
+              marginBottom: '8px',
+            }}
+          >
+            <option value={ConnectivityType.ALL}>
+              All Nodes ({connectivityStats.total})
+            </option>
+            <option value={ConnectivityType.ORPHANS}>
+              Orphans - No Children ({connectivityStats.orphans})
+            </option>
+            <option value={ConnectivityType.ROOTS}>
+              Roots - No Parents ({connectivityStats.roots})
+            </option>
+            <option value={ConnectivityType.JUNCTION}>
+              Junctions - Multiple In/Out ({connectivityStats.junctions})
+            </option>
+            <option value={ConnectivityType.HIGH_DEGREE}>
+              High-Degree - Many Connections ({connectivityStats.highDegree})
+            </option>
+            <option value={ConnectivityType.BRIDGE}>
+              Bridges - Connect Cohorts ({connectivityStats.bridges})
+            </option>
+          </select>
+        </div>
+
         <h5
           style={{
             color: '#fff',

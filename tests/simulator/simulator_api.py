@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import websockets
-from simulator import Network
+from tests.simulator.simulator import Network
 import braid
 
 logging.basicConfig(level=logging.INFO)

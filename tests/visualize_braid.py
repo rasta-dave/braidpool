@@ -9,7 +9,7 @@ saving the result to a PNG file.
 import os
 import sys
 import argparse
-from simulator import Braid
+from tests.simulator.simulator import Braid
 import matplotlib.pyplot as plt
 
 def main():
