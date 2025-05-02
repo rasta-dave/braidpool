@@ -19,6 +19,14 @@ interface BraidPoolDAGControlsProps {
   setConnectivityFilter: (type: ConnectivityType) => void;
   edgeFilter: EdgeType;
   setEdgeFilter: (type: EdgeType) => void;
+  searchTerm?: string;
+  setSearchTerm?: (term: string) => void;
+  nodeSpacing?: number;
+  setNodeSpacing?: (spacing: number) => void;
+  enableDragging?: boolean;
+  setEnableDragging?: (enable: boolean) => void;
+  verticalSpacing?: number;
+  setVerticalSpacing?: (spacing: number) => void;
   connectivityStats?: {
     orphans: number;
     roots: number;
@@ -53,6 +61,14 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   setConnectivityFilter,
   edgeFilter,
   setEdgeFilter,
+  searchTerm = '',
+  setSearchTerm = () => {},
+  nodeSpacing = 80,
+  setNodeSpacing = () => {},
+  verticalSpacing = 60,
+  setVerticalSpacing = () => {},
+  enableDragging = false,
+  setEnableDragging = () => {},
   connectivityStats = {
     orphans: 0,
     roots: 0,
@@ -407,6 +423,112 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
             transition: 'opacity 0.3s ease',
           }}
         >
+          <h5
+            style={{
+              color: '#fff',
+              margin: '0 0 10px 0',
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }}
+          >
+            Search Node
+          </h5>
+          <div style={{ marginBottom: '15px' }}>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Enter node ID or hash..."
+              style={{
+                width: '100%',
+                padding: '8px',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: '#fff',
+                border: '1px solid #0077B6',
+                borderRadius: '4px',
+                fontSize: '12px',
+              }}
+            />
+            <div style={{ marginTop: '5px', fontSize: '10px', color: '#ccc' }}>
+              Search will highlight the node and its connected path
+            </div>
+          </div>
+
+          <h5
+            style={{
+              color: '#fff',
+              margin: '0 0 10px 0',
+              fontSize: '14px',
+              fontWeight: 'bold',
+            }}
+          >
+            Layout Controls
+          </h5>
+
+          <div style={{ marginBottom: '15px' }}>
+            <div style={{ marginBottom: '8px' }}>
+              <span
+                style={{
+                  color: '#fff',
+                  fontSize: '12px',
+                  display: 'block',
+                  marginBottom: '5px',
+                }}
+              >
+                Horizontal Spacing: {nodeSpacing}px
+              </span>
+              <input
+                type="range"
+                min="40"
+                max="150"
+                value={nodeSpacing}
+                onChange={(e) => setNodeSpacing(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '8px' }}>
+              <span
+                style={{
+                  color: '#fff',
+                  fontSize: '12px',
+                  display: 'block',
+                  marginBottom: '5px',
+                }}
+              >
+                Vertical Spacing: {verticalSpacing}px
+              </span>
+              <input
+                type="range"
+                min="20"
+                max="120"
+                value={verticalSpacing}
+                onChange={(e) => setVerticalSpacing(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </div>
+
+            <div style={{ marginTop: '10px' }}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: '#fff',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={enableDragging}
+                  onChange={(e) => setEnableDragging(e.target.checked)}
+                  style={{ marginRight: '8px' }}
+                />
+                Enable Node Dragging
+              </label>
+            </div>
+          </div>
+
           <h5
             style={{
               color: '#fff',

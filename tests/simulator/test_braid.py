@@ -1,5 +1,5 @@
 import unittest
-from braid import *
+from tests.simulator.braid import *
 
 class TestCohortMethods(unittest.TestCase):
     """ Test harness for unittest. """

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import { io, Socket } from 'socket.io-client';
 import Card from '@mui/material/Card';
@@ -93,123 +93,247 @@ const BraidPoolDAG: React.FC = () => {
   const COLUMN_WIDTH = 80;
   const VERTICAL_SPACING = 60;
 
-  const layoutNodes = (
-    allNodes: GraphNode[],
-    hwPath: string[],
-    cohorts: string[][]
-  ): Record<string, Position> => {
-    const positions: Record<string, Position> = {};
-    const columnOccupancy: Record<number, number> = {};
-    const hwPathSet = new Set(hwPath);
-    const centerY = height / 2;
-    const cohortMap = new Map<string, number>();
-    cohorts.forEach((cohort, index) => {
-      cohort.forEach((nodeId) => cohortMap.set(nodeId, index));
-    });
+  // New state variables for search and layout
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [nodeSpacing, setNodeSpacing] = useState<number>(80);
+  const [verticalSpacing, setVerticalSpacing] = useState<number>(60);
+  const [enableDragging, setEnableDragging] = useState<boolean>(false);
+  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(
+    new Set()
+  );
+  const [highlightedLinks, setHighlightedLinks] = useState<Set<string>>(
+    new Set()
+  );
+  const [draggedNode, setDraggedNode] = useState<string | null>(null);
+  const [nodePositions, setNodePositions] = useState<Record<string, Position>>(
+    {}
+  );
 
-    let currentX = margin.left;
-    let prevCohort: number | undefined;
-    const hwPathColumns: number[] = [];
+  const layoutNodes = useCallback(
+    (
+      allNodes: GraphNode[],
+      hwPath: string[],
+      cohorts: string[][]
+    ): Record<string, Position> => {
+      // Hierarchical layout with adjustable spacing
+      const positions: Record<string, Position> = {};
+      const columnOccupancy: Record<number, number> = {};
+      const hwPathSet = new Set(hwPath);
+      const centerY = height / 2;
+      const cohortMap = new Map<string, number>();
+      cohorts.forEach((cohort, index) => {
+        cohort.forEach((nodeId) => cohortMap.set(nodeId, index));
+      });
 
-    hwPath.forEach((nodeId, index) => {
-      const currentCohort = cohortMap.get(nodeId);
+      let currentX = margin.left;
+      let prevCohort: number | undefined;
+      const hwPathColumns: number[] = [];
 
-      if (prevCohort !== undefined && currentCohort !== prevCohort) {
-        currentX += COLUMN_WIDTH;
-      }
+      hwPath.forEach((nodeId, index) => {
+        const currentCohort = cohortMap.get(nodeId);
 
-      positions[nodeId] = { x: currentX, y: centerY };
-      hwPathColumns.push(currentX);
-      columnOccupancy[index] = 0;
-
-      prevCohort = currentCohort;
-      currentX += COLUMN_WIDTH;
-    });
-
-    const generations = new Map<string, number>();
-    const remainingNodes = allNodes.filter((node) => !hwPathSet.has(node.id));
-
-    remainingNodes.forEach((node) => {
-      const hwpParents = node.parents.filter((p) => hwPathSet.has(p));
-      if (hwpParents.length > 0) {
-        const minHWPIndex = Math.min(
-          ...hwpParents.map((p) => hwPath.indexOf(p))
-        );
-        generations.set(node.id, minHWPIndex + 1);
-      } else {
-        const parentGens = node.parents.map((p) => generations.get(p) || 0);
-        generations.set(
-          node.id,
-          parentGens.length > 0 ? Math.max(...parentGens) + 1 : 0
-        );
-      }
-    });
-
-    remainingNodes.sort(
-      (a, b) => (generations.get(a.id) || 0) - (generations.get(b.id) || 0)
-    );
-
-    const tipNodes: string[] = [];
-
-    remainingNodes.forEach((node) => {
-      if (node.parents.length === 1 && !node.children?.length) {
-        tipNodes.push(node.id);
-      }
-      const positionedParents = node.parents.filter((p) => positions[p]);
-
-      let targetX: number;
-      let colKey: number;
-
-      if (positionedParents.length === 0) {
-        colKey = 0;
-        while (
-          columnOccupancy[colKey] !== undefined &&
-          columnOccupancy[colKey] >= 10
-        ) {
-          colKey++;
+        if (prevCohort !== undefined && currentCohort !== prevCohort) {
+          currentX += nodeSpacing; // Use the adjustable spacing
         }
-        targetX = margin.left + colKey * COLUMN_WIDTH;
-      } else {
-        const maxParentX = Math.max(
-          ...positionedParents.map((p) => positions[p].x)
-        );
-        targetX = maxParentX + COLUMN_WIDTH;
 
-        const hwpParents = positionedParents.filter((p) => hwPathSet.has(p));
+        positions[nodeId] = { x: currentX, y: centerY };
+        hwPathColumns.push(currentX);
+        columnOccupancy[index] = 0;
+
+        prevCohort = currentCohort;
+        currentX += nodeSpacing; // Use the adjustable spacing
+      });
+
+      const generations = new Map<string, number>();
+      const remainingNodes = allNodes.filter((node) => !hwPathSet.has(node.id));
+
+      remainingNodes.forEach((node) => {
+        const hwpParents = node.parents.filter((p) => hwPathSet.has(p));
         if (hwpParents.length > 0) {
-          const rightmostHWPParentX = Math.max(
-            ...hwpParents.map((p) => positions[p].x)
+          const minHWPIndex = Math.min(
+            ...hwpParents.map((p) => hwPath.indexOf(p))
           );
-          const parentIndex = hwPathColumns.indexOf(rightmostHWPParentX);
-          if (parentIndex >= 0 && parentIndex < hwPathColumns.length - 1) {
-            targetX = hwPathColumns[parentIndex + 1];
+          generations.set(node.id, minHWPIndex + 1);
+        } else {
+          const parentGens = node.parents.map((p) => generations.get(p) || 0);
+          generations.set(
+            node.id,
+            parentGens.length > 0 ? Math.max(...parentGens) + 1 : 0
+          );
+        }
+      });
+
+      remainingNodes.sort(
+        (a, b) => (generations.get(a.id) || 0) - (generations.get(b.id) || 0)
+      );
+
+      const tipNodes: string[] = [];
+
+      remainingNodes.forEach((node) => {
+        if (node.parents.length === 1 && !node.children?.length) {
+          tipNodes.push(node.id);
+        }
+        const positionedParents = node.parents.filter((p) => positions[p]);
+
+        let targetX: number;
+        let colKey: number;
+
+        if (positionedParents.length === 0) {
+          colKey = 0;
+          while (
+            columnOccupancy[colKey] !== undefined &&
+            columnOccupancy[colKey] >= 10
+          ) {
+            colKey++;
           }
+          targetX = margin.left + colKey * nodeSpacing;
+        } else {
+          const maxParentX = Math.max(
+            ...positionedParents.map((p) => positions[p].x)
+          );
+          targetX = maxParentX + nodeSpacing;
+
+          const hwpParents = positionedParents.filter((p) => hwPathSet.has(p));
+          if (hwpParents.length > 0) {
+            const rightmostHWPParentX = Math.max(
+              ...hwpParents.map((p) => positions[p].x)
+            );
+            const parentIndex = hwPathColumns.indexOf(rightmostHWPParentX);
+            if (parentIndex >= 0 && parentIndex < hwPathColumns.length - 1) {
+              targetX = hwPathColumns[parentIndex + 1];
+            }
+          }
+
+          colKey = Math.round((targetX - margin.left) / nodeSpacing);
         }
 
-        colKey = Math.round((targetX - margin.left) / COLUMN_WIDTH);
-      }
+        let count = columnOccupancy[colKey] || 0;
+        const direction = count % 2 !== 0 ? 1 : -1;
+        const level = Math.ceil((count + 1) / 2);
+        const yOffset = direction * level * verticalSpacing; // Use adjustable vertical spacing
+        const yPos = centerY + yOffset;
 
-      let count = columnOccupancy[colKey] || 0;
-      const direction = count % 2 !== 0 ? 1 : -1;
-      const level = Math.ceil((count + 1) / 2);
-      const yOffset = direction * level * VERTICAL_SPACING;
-      const yPos = centerY + yOffset;
+        columnOccupancy[colKey] = count + 1;
 
-      columnOccupancy[colKey] = count + 1;
+        positions[node.id] = { x: targetX, y: yPos };
+      });
 
-      positions[node.id] = { x: targetX, y: yPos };
+      const maxColumnX = Math.max(
+        ...Object.values(positions).map((pos) => pos.x)
+      );
+      tipNodes.forEach((tipId) => {
+        if (positions[tipId]) {
+          positions[tipId].x = maxColumnX;
+        }
+      });
+
+      // Apply any custom positions from dragging
+      Object.keys(nodePositions).forEach((nodeId) => {
+        if (positions[nodeId]) {
+          positions[nodeId] = nodePositions[nodeId];
+        }
+      });
+
+      return positions;
+    },
+    [height, margin, nodeRadius, nodeSpacing, verticalSpacing, nodePositions]
+  );
+
+  // Function to find paths for highlighting based on search
+  const findPathsToHighlight = (
+    nodeId: string,
+    graphData: GraphData
+  ): { nodes: Set<string>; links: Set<string> } => {
+    const nodesToHighlight = new Set<string>();
+    const linksToHighlight = new Set<string>();
+
+    // Recursive function to trace ancestors
+    const traceAncestors = (currentId: string, visited = new Set<string>()) => {
+      if (visited.has(currentId)) return;
+      visited.add(currentId);
+      nodesToHighlight.add(currentId);
+
+      // Process parents (ancestors)
+      const parents = graphData.parents[currentId] || [];
+      parents.forEach((parentId) => {
+        nodesToHighlight.add(parentId);
+        linksToHighlight.add(`${parentId}-${currentId}`);
+        traceAncestors(parentId, visited);
+      });
+    };
+
+    // Recursive function to trace descendants
+    const traceDescendants = (
+      currentId: string,
+      visited = new Set<string>()
+    ) => {
+      if (visited.has(currentId)) return;
+      visited.add(currentId);
+      nodesToHighlight.add(currentId);
+
+      // Process children (descendants)
+      const children = graphData.children[currentId] || [];
+      children.forEach((childId) => {
+        nodesToHighlight.add(childId);
+        linksToHighlight.add(`${currentId}-${childId}`);
+        traceDescendants(childId, visited);
+      });
+    };
+
+    // Start the tracing
+    traceAncestors(nodeId);
+    traceDescendants(nodeId);
+
+    return { nodes: nodesToHighlight, links: linksToHighlight };
+  };
+
+  // Effect to handle search term changes
+  useEffect(() => {
+    if (!graphData || !searchTerm.trim()) {
+      setHighlightedNodes(new Set());
+      setHighlightedLinks(new Set());
+      return;
+    }
+
+    // Search by ID or hash
+    const searchLower = searchTerm.toLowerCase();
+    const foundNodeId = Object.keys(graphData.parents).find((id) => {
+      // Match by partial hash
+      if (id.toLowerCase().includes(searchLower)) return true;
+
+      // Match by node ID in the map
+      const nodeIdInMap = nodeIdMap[id];
+      return nodeIdInMap && nodeIdInMap.toString().includes(searchTerm);
     });
 
-    const maxColumnX = Math.max(
-      ...Object.values(positions).map((pos) => pos.x)
-    );
-    tipNodes.forEach((tipId) => {
-      if (positions[tipId]) {
-        positions[tipId].x = maxColumnX;
-      }
-    });
+    if (foundNodeId) {
+      const { nodes, links } = findPathsToHighlight(foundNodeId, graphData);
+      setHighlightedNodes(nodes);
+      setHighlightedLinks(links);
+    } else {
+      setHighlightedNodes(new Set());
+      setHighlightedLinks(new Set());
+    }
+  }, [searchTerm, graphData, nodeIdMap]);
 
-    return positions;
+  // Handle node dragging
+  const handleNodeDragStart = (nodeId: string) => {
+    if (enableDragging) {
+      setDraggedNode(nodeId);
+    }
+  };
+
+  const handleNodeDrag = (nodeId: string, x: number, y: number) => {
+    if (enableDragging && draggedNode === nodeId) {
+      setNodePositions((prev) => ({
+        ...prev,
+        [nodeId]: { x, y },
+      }));
+    }
+  };
+
+  const handleNodeDragEnd = () => {
+    setDraggedNode(null);
   };
 
   const [_socket, setSocket] = useState<Socket | null>(null);
@@ -527,7 +651,29 @@ const BraidPoolDAG: React.FC = () => {
         if (!visibleNodeIds.has(d.id)) return 'none';
         if (showHWPOnly && !hwPathSet.has(d.id)) return 'none';
         return 'inline';
-      });
+      })
+      // Add dragging behavior
+      .call(
+        enableDragging
+          ? d3
+              .drag<SVGGElement, any>()
+              .on('start', function (event, d) {
+                handleNodeDragStart(d.id);
+              })
+              .on('drag', function (event, d) {
+                const x = event.x - offsetX;
+                const y = event.y;
+                handleNodeDrag(d.id, x, y);
+                d3.select(this).attr(
+                  'transform',
+                  `translate(${event.x},${event.y})`
+                );
+              })
+              .on('end', function () {
+                handleNodeDragEnd();
+              })
+          : () => {}
+      );
 
     const cohortMap = new Map<string, number>();
     (cohorts as string[][]).forEach((cohort, index) => {
@@ -557,7 +703,10 @@ const BraidPoolDAG: React.FC = () => {
         return COLORS[0];
       })
       .attr('stroke', (d) => {
-        // Highlight specific node types based on filters
+        // Highlight nodes based on search
+        if (highlightedNodes.has(d.id)) return '#ffffff';
+
+        // Existing highlighting
         if (highlightOrphans && (!d.children || d.children.length === 0))
           return '#FF0000';
         if (hwPathSet.has(d.id)) return '#FF8500';
@@ -565,90 +714,22 @@ const BraidPoolDAG: React.FC = () => {
       })
       .attr('stroke-width', (d) => {
         // Make highlighted nodes have thicker borders
+        if (highlightedNodes.has(d.id)) return 4;
         if (highlightOrphans && (!d.children || d.children.length === 0))
           return 3;
         if (hwPathSet.has(d.id)) return 3;
         return 2;
       })
       .attr('opacity', (d) => {
+        // Dim nodes that aren't highlighted when searching
+        if (
+          searchTerm &&
+          !highlightedNodes.has(d.id) &&
+          highlightedNodes.size > 0
+        )
+          return 0.3;
         if (showHWPOnly && !hwPathSet.has(d.id)) return 0.3;
         return 1;
-      })
-      .on('mouseover', function (event: MouseEvent, d: GraphNode) {
-        d3.select(this).attr('stroke', '#FF8500').attr('stroke-width', 3);
-
-        const cohortIndex = cohortMap.get(d.id);
-        const isHWP = hwPathSet.has(d.id);
-        const isOrphan = !d.children || d.children.length === 0;
-
-        // Calculate hex value for display
-        const hexValue = d.id.substring(0, 16) + '...';
-        const numericValue = nodeValues[d.id] || 0;
-
-        // Connectivity information
-        const connectivityInfo = [];
-        if (d.parents.length === 0) connectivityInfo.push('Root');
-        if (d.children.length === 0) connectivityInfo.push('Orphan');
-        if (d.parents.length > 1 && d.children.length > 1)
-          connectivityInfo.push('Junction');
-        if (d.parents.length + d.children.length > 5)
-          connectivityInfo.push('High-Degree');
-
-        // Check if it's a bridge node
-        const bridgeNodes = findBridgeNodes(graphData);
-        if (bridgeNodes.has(d.id)) connectivityInfo.push('Bridge');
-
-        const connectivityString =
-          connectivityInfo.length > 0
-            ? connectivityInfo.join(', ')
-            : 'Standard';
-
-        const tooltipContent = `
-                <div><strong>ID:</strong> ${
-                  nodeIdMap[d.id] || '?'
-                } (${hexValue})</div>
-                <div><strong>Cohort:</strong> ${
-                  cohortIndex !== undefined ? cohortIndex : 'N/A'
-                }</div>
-                <div><strong>Highest Work Path:</strong> ${
-                  isHWP ? 'Yes' : 'No'
-                }</div>
-                <div><strong>Type:</strong> ${connectivityString}</div>
-                <div><strong>Connections:</strong> ${d.parents.length} in, ${
-          d.children.length
-        } out</div>
-                <div><strong>Hash Value:</strong> ${numericValue.toFixed(
-                  4
-                )}</div>
-                <div><strong>Parents:</strong> ${
-                  d.parents.length > 0
-                    ? d.parents.map((p) => `${nodeIdMap[p] || '?'}`).join(', ')
-                    : 'None'
-                }</div>
-                <div><strong>Children:</strong> ${
-                  d.children && d.children.length > 0
-                    ? d.children.map((c) => `${nodeIdMap[c] || '?'}`).join(', ')
-                    : 'None'
-                }</div>
-                `;
-
-        tooltip.html(tooltipContent).style('visibility', 'visible');
-      })
-      .on('mouseout', function () {
-        d3.select(this)
-          .attr('stroke', (d: any) => {
-            if (highlightOrphans && (!d.children || d.children.length === 0))
-              return '#FF0000';
-            if (hwPathSet.has(d.id)) return '#FF8500';
-            return '#fff';
-          })
-          .attr('stroke-width', (d: any) => {
-            if (highlightOrphans && (!d.children || d.children.length === 0))
-              return 3;
-            if (hwPathSet.has(d.id)) return 3;
-            return 2;
-          });
-        tooltip.style('visibility', 'hidden');
       });
 
     nodes
@@ -673,6 +754,7 @@ const BraidPoolDAG: React.FC = () => {
       .data([
         { id: 'arrow-blue', color: '#48CAE4' },
         { id: 'arrow-orange', color: '#FF8500' },
+        { id: 'arrow-white', color: '#FFFFFF' },
       ])
       .enter()
       .append('marker')
@@ -753,17 +835,40 @@ const BraidPoolDAG: React.FC = () => {
         const ratio = nodeRadius / dist;
         return tgt.y + dy * ratio;
       })
-      .attr('stroke', (d) =>
-        hwPathSet.has(d.source) && hwPathSet.has(d.target)
+      .attr('stroke', (d) => {
+        // Highlight edges
+        if (
+          highlightedLinks.has(`${d.source}-${d.target}`) ||
+          highlightedLinks.has(`${d.target}-${d.source}`)
+        ) {
+          return '#ffffff';
+        }
+        return hwPathSet.has(d.source) && hwPathSet.has(d.target)
           ? '#FF8500'
-          : '#48CAE4'
-      )
-      .attr('stroke-width', 1.5)
-      .attr('marker-end', (d) =>
-        hwPathSet.has(d.source) && hwPathSet.has(d.target)
+          : '#48CAE4';
+      })
+      .attr('stroke-width', (d) => {
+        // Make highlighted edges thicker
+        if (
+          highlightedLinks.has(`${d.source}-${d.target}`) ||
+          highlightedLinks.has(`${d.target}-${d.source}`)
+        ) {
+          return 3;
+        }
+        return 1.5;
+      })
+      .attr('marker-end', (d) => {
+        // Use appropriate arrow marker based on link type
+        if (
+          highlightedLinks.has(`${d.source}-${d.target}`) ||
+          highlightedLinks.has(`${d.target}-${d.source}`)
+        ) {
+          return 'url(#arrow-white)';
+        }
+        return hwPathSet.has(d.source) && hwPathSet.has(d.target)
           ? 'url(#arrow-orange)'
-          : 'url(#arrow-blue)'
-      )
+          : 'url(#arrow-blue)';
+      })
       .style('display', (d) => {
         if (!visibleNodeIds.has(d.source) || !visibleNodeIds.has(d.target)) {
           return 'none';
@@ -776,7 +881,16 @@ const BraidPoolDAG: React.FC = () => {
         }
         return 'inline';
       })
-      .style('opacity', (d) => {
+      .attr('opacity', (d) => {
+        // Dim links that aren't highlighted when searching
+        if (
+          searchTerm &&
+          !highlightedLinks.has(`${d.source}-${d.target}`) &&
+          !highlightedLinks.has(`${d.target}-${d.source}`) &&
+          highlightedLinks.size > 0
+        ) {
+          return 0.3;
+        }
         if (
           showHWPOnly &&
           (!hwPathSet.has(d.source) || !hwPathSet.has(d.target))
@@ -794,7 +908,15 @@ const BraidPoolDAG: React.FC = () => {
     colorMode,
     nodeValues,
     connectivityFilter,
-    edgeFilter, // Add edge filter as dependency
+    edgeFilter,
+    nodeSpacing,
+    verticalSpacing,
+    searchTerm,
+    highlightedNodes,
+    highlightedLinks,
+    enableDragging,
+    nodePositions,
+    draggedNode,
   ]);
 
   if (loading) {
@@ -856,6 +978,14 @@ const BraidPoolDAG: React.FC = () => {
           edgeFilter={edgeFilter}
           setEdgeFilter={setEdgeFilter}
           edgeStats={edgeStats}
+          searchTerm={searchTerm}
+          setSearchTerm={setSearchTerm}
+          nodeSpacing={nodeSpacing}
+          setNodeSpacing={setNodeSpacing}
+          verticalSpacing={verticalSpacing}
+          setVerticalSpacing={setVerticalSpacing}
+          enableDragging={enableDragging}
+          setEnableDragging={setEnableDragging}
         />
 
         <Card
