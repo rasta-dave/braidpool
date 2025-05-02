@@ -88,6 +88,14 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [showColorLegend, setShowColorLegend] = useState(false);
 
+  // Add tooltip state
+  const [tooltip, setTooltip] = useState({
+    show: false,
+    text: '',
+    x: 0,
+    y: 0,
+  });
+
   // State for draggable color legend
   const [legendPosition, setLegendPosition] = useState({ x: 250, y: 10 });
   const [isDragging, setIsDragging] = useState(false);
@@ -152,6 +160,147 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
     { value: 0.8, color: '#7AD151', label: 'High' },
     { value: 1.0, color: '#FDE725', label: 'Highest (HWP)' },
   ];
+
+  // Function to position tooltip properly to stay within screen
+  const positionTooltip = (x: number, y: number, width: number = 300) => {
+    // Get window dimensions
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    // Adjust x position to keep tooltip on screen
+    let adjustedX = x;
+    if (adjustedX + width > windowWidth - 20) {
+      adjustedX = windowWidth - width - 20;
+    }
+
+    // Adjust y position (prioritize showing below element, but show above if not enough space)
+    let adjustedY = y + 25;
+    const estimatedHeight = 150; // Estimate tooltip height
+
+    if (adjustedY + estimatedHeight > windowHeight - 20) {
+      adjustedY = y - estimatedHeight - 10;
+    }
+
+    return { x: adjustedX, y: adjustedY };
+  };
+
+  // Create helper function to show tooltip
+  const showTooltipFor = (section: string, event: React.MouseEvent) => {
+    let tooltipText = '';
+
+    switch (section) {
+      case 'search':
+        tooltipText = `
+          <strong>Search Node</strong><br/>
+          Find specific nodes in the graph by ID or hash value. When a node is found:
+          <ul>
+            <li>The matching node will be highlighted</li>
+            <li>All connecting paths to and from the node will be shown</li>
+            <li>Other nodes and paths will be dimmed</li>
+          </ul>
+          Use this to trace the path of specific nodes or analyze their connections.
+        `;
+        break;
+      case 'layout':
+        tooltipText = `
+          <strong>Layout Controls</strong><br/>
+          Adjust how nodes are arranged in the visualization:
+          <ul>
+            <li><strong>Horizontal Spacing:</strong> Controls distance between nodes in columns</li>
+            <li><strong>Vertical Spacing:</strong> Controls distance between stacked nodes</li>
+            <li><strong>Enable Node Dragging:</strong> Lets you click and drag nodes to custom positions</li>
+          </ul>
+          Use these controls to better organize complex graphs or focus on specific areas.
+        `;
+        break;
+      case 'connectivity':
+        tooltipText = `
+          <strong>Connectivity Filter</strong><br/>
+          Filter nodes based on their network connections:
+          <ul>
+            <li><strong>All Nodes:</strong> Shows the complete network</li>
+            <li><strong>Orphans:</strong> Nodes with no children (endpoints)</li>
+            <li><strong>Roots:</strong> Nodes with no parents (starting points)</li>
+            <li><strong>Junctions:</strong> Nodes with multiple parents and children (high connectivity)</li>
+            <li><strong>High-Degree:</strong> Nodes with many total connections</li>
+            <li><strong>Bridges:</strong> Nodes that connect different cohorts</li>
+          </ul>
+          Use this filter to analyze network topology and identify key nodes.
+        `;
+        break;
+      case 'edge':
+        tooltipText = `
+          <strong>Edge Type Filter</strong><br/>
+          Filter connections between nodes based on their relationship:
+          <ul>
+            <li><strong>All Connections:</strong> Shows all edges</li>
+            <li><strong>Within Same Cohort:</strong> Connections between nodes in the same timeframe</li>
+            <li><strong>Between Different Cohorts:</strong> Connections across different timeframes</li>
+            <li><strong>Highest Work Path:</strong> Connections along the main consensus path</li>
+            <li><strong>Bridge Connections:</strong> Key edges that connect different parts of the network</li>
+          </ul>
+          Use this to analyze how information flows through the network.
+        `;
+        break;
+      case 'filter':
+        tooltipText = `
+          <strong>Filter Nodes</strong><br/>
+          Control which nodes are visible in the graph:
+          <ul>
+            <li><strong>Cohorts:</strong> Show only the selected number of most recent cohorts</li>
+            <li><strong>Highest Work Path Only:</strong> Show only nodes on the main consensus path</li>
+            <li><strong>Highlight Orphans:</strong> Visually highlight nodes without children</li>
+          </ul>
+          These filters help simplify complex graphs and focus on specific aspects of the network.
+        `;
+        break;
+      default:
+        tooltipText = '';
+    }
+
+    if (tooltipText) {
+      const bounds = event.currentTarget.getBoundingClientRect();
+      const position = positionTooltip(bounds.left, bounds.bottom);
+
+      setTooltip({
+        show: true,
+        text: tooltipText,
+        x: position.x,
+        y: position.y,
+      });
+    }
+  };
+
+  // Hide tooltip function
+  const hideTooltip = () => {
+    setTooltip({ ...tooltip, show: false });
+  };
+
+  // Create tooltip component
+  const TooltipComponent = () => (
+    <div
+      style={{
+        display: tooltip.show ? 'block' : 'none',
+        position: 'fixed',
+        left: `${tooltip.x}px`,
+        top: `${tooltip.y}px`,
+        width: '300px',
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
+        color: 'white',
+        padding: '12px',
+        borderRadius: '6px',
+        boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
+        zIndex: 2000,
+        fontSize: '12px',
+        lineHeight: '1.4',
+        border: '1px solid #0077B6',
+        maxHeight: '400px',
+        overflowY: 'auto',
+      }}
+      dangerouslySetInnerHTML={{ __html: tooltip.text }}
+      onClick={() => hideTooltip()}
+    />
+  );
 
   // Color legend panel component
   const ColorLegendPanel = () => (
@@ -394,6 +543,9 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
       {/* Color legend panel */}
       <ColorLegendPanel />
 
+      {/* Tooltip component */}
+      <TooltipComponent />
+
       {/* Main filter panel */}
       <div
         className="filter-panel"
@@ -429,9 +581,30 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               margin: '0 0 10px 0',
               fontSize: '14px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             Search Node
+            <div
+              style={{
+                marginLeft: '8px',
+                cursor: 'help',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => showTooltipFor('search', e)}
+              onMouseLeave={hideTooltip}
+            >
+              ?
+            </div>
           </h5>
           <div style={{ marginBottom: '15px' }}>
             <input
@@ -460,9 +633,30 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               margin: '0 0 10px 0',
               fontSize: '14px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             Layout Controls
+            <div
+              style={{
+                marginLeft: '8px',
+                cursor: 'help',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => showTooltipFor('layout', e)}
+              onMouseLeave={hideTooltip}
+            >
+              ?
+            </div>
           </h5>
 
           <div style={{ marginBottom: '15px' }}>
@@ -535,9 +729,30 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               margin: '0 0 10px 0',
               fontSize: '14px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             Connectivity Filter
+            <div
+              style={{
+                marginLeft: '8px',
+                cursor: 'help',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => showTooltipFor('connectivity', e)}
+              onMouseLeave={hideTooltip}
+            >
+              ?
+            </div>
           </h5>
 
           <div
@@ -592,9 +807,30 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               margin: '0 0 10px 0',
               fontSize: '14px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             Edge Type Filter
+            <div
+              style={{
+                marginLeft: '8px',
+                cursor: 'help',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => showTooltipFor('edge', e)}
+              onMouseLeave={hideTooltip}
+            >
+              ?
+            </div>
           </h5>
 
           <div
@@ -644,9 +880,30 @@ const BraidPoolDAGControls: React.FC<BraidPoolDAGControlsProps> = ({
               margin: '0 0 10px 0',
               fontSize: '14px',
               fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
             }}
           >
             Filter Nodes
+            <div
+              style={{
+                marginLeft: '8px',
+                cursor: 'help',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '10px',
+                fontWeight: 'bold',
+              }}
+              onMouseEnter={(e) => showTooltipFor('filter', e)}
+              onMouseLeave={hideTooltip}
+            >
+              ?
+            </div>
           </h5>
 
           <div
