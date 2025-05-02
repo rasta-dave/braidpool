@@ -109,6 +109,8 @@ const BraidPoolDAG: React.FC = () => {
     {}
   );
 
+  const [matchingNodes, setMatchingNodes] = useState<string[]>([]);
+
   const layoutNodes = useCallback(
     (
       allNodes: GraphNode[],
@@ -247,6 +249,9 @@ const BraidPoolDAG: React.FC = () => {
     const nodesToHighlight = new Set<string>();
     const linksToHighlight = new Set<string>();
 
+    // Always include the target node itself
+    nodesToHighlight.add(nodeId);
+
     // Recursive function to trace ancestors
     const traceAncestors = (currentId: string, visited = new Set<string>()) => {
       if (visited.has(currentId)) return;
@@ -284,6 +289,9 @@ const BraidPoolDAG: React.FC = () => {
     traceAncestors(nodeId);
     traceDescendants(nodeId);
 
+    console.log(
+      `🔍 Path highlight for ${nodeId}: found ${nodesToHighlight.size} nodes and ${linksToHighlight.size} links`
+    );
     return { nodes: nodesToHighlight, links: linksToHighlight };
   };
 
@@ -292,25 +300,92 @@ const BraidPoolDAG: React.FC = () => {
     if (!graphData || !searchTerm.trim()) {
       setHighlightedNodes(new Set());
       setHighlightedLinks(new Set());
+      setMatchingNodes([]);
       return;
     }
 
-    // Search by ID or hash
-    const searchLower = searchTerm.toLowerCase();
-    const foundNodeId = Object.keys(graphData.parents).find((id) => {
-      // Match by partial hash
-      if (id.toLowerCase().includes(searchLower)) return true;
+    // Debugging to understand nodeIdMap structure
+    console.log('🔍 Search activated for:', searchTerm);
 
-      // Match by node ID in the map
-      const nodeIdInMap = nodeIdMap[id];
-      return nodeIdInMap && nodeIdInMap.toString().includes(searchTerm);
+    // Find matching nodes with improved logic
+    const foundNodes: string[] = [];
+    const exactMatches: string[] = [];
+    const isNumericSearch = !isNaN(Number(searchTerm));
+
+    // Check both node IDs and hash IDs
+    Object.entries(nodeIdMap).forEach(([hash, id]) => {
+      // For numeric searches, be more precise
+      if (isNumericSearch) {
+        // Exact ID match for numeric search
+        if (id === searchTerm) {
+          exactMatches.push(hash);
+          foundNodes.push(hash);
+          console.log(`✅ Found EXACT numeric match: Node #${id}`);
+        }
+      } else {
+        // For non-numeric searches (hashes), we can be more lenient
+        // Check for ID match
+        if (id === searchTerm) {
+          exactMatches.push(hash);
+          foundNodes.push(hash);
+          console.log(`✅ Found exact ID match: Node #${id}`);
+        } else if (id.includes(searchTerm)) {
+          foundNodes.push(hash);
+          console.log(`✅ Found partial ID match: Node #${id}`);
+        }
+        // Check for hash match (partial)
+        else if (hash.toLowerCase().includes(searchTerm.toLowerCase())) {
+          foundNodes.push(hash);
+          console.log(`✅ Found hash match: Node #${hash.substring(0, 8)}...`);
+        }
+      }
     });
 
-    if (foundNodeId) {
-      const { nodes, links } = findPathsToHighlight(foundNodeId, graphData);
-      setHighlightedNodes(nodes);
-      setHighlightedLinks(links);
+    // If we're doing a numeric search and didn't find an exact match
+    // but found partial matches, clear the results to avoid confusion
+    if (isNumericSearch && exactMatches.length === 0 && foundNodes.length > 0) {
+      console.log(
+        `⚠️ Multiple partial matches found for numeric search '${searchTerm}', but no exact match - clearing results`
+      );
+      foundNodes.length = 0;
+    }
+
+    console.log(
+      `📊 Found ${foundNodes.length} matching nodes (${exactMatches.length} exact matches)`
+    );
+
+    // Update the matching nodes state
+    setMatchingNodes(exactMatches.length > 0 ? exactMatches : foundNodes);
+
+    // Create a visual flag for rendering to ensure highlighting happens
+    if (foundNodes.length > 0) {
+      // Initialize highlight collections
+      const nodesToHighlight = new Set<string>();
+      const linksToHighlight = new Set<string>();
+
+      // Process each matching node
+      foundNodes.forEach((nodeId) => {
+        // Add the found node itself first
+        nodesToHighlight.add(nodeId);
+
+        // Add connected paths
+        const { nodes, links } = findPathsToHighlight(nodeId, graphData);
+        nodes.forEach((n) => nodesToHighlight.add(n));
+        links.forEach((l) => linksToHighlight.add(l));
+
+        console.log(
+          `🔍 For node ${nodeIdMap[nodeId]}: highlighting ${nodes.size} connected nodes and ${links.size} links`
+        );
+      });
+
+      // Set the highlights
+      console.log(
+        `🎯 Total highlight: ${nodesToHighlight.size} nodes, ${linksToHighlight.size} links`
+      );
+      setHighlightedNodes(nodesToHighlight);
+      setHighlightedLinks(linksToHighlight);
     } else {
+      console.log('❌ No matching nodes found');
       setHighlightedNodes(new Set());
       setHighlightedLinks(new Set());
     }
@@ -887,6 +962,11 @@ const BraidPoolDAG: React.FC = () => {
       cohort.forEach((nodeId) => cohortMap.set(nodeId, index));
     });
 
+    // Create a focus group for highlighted nodes that will be rendered on top
+    const highlightGroup = container
+      .append('g')
+      .attr('class', 'highlight-group');
+
     nodes
       .append('circle')
       .attr('r', nodeRadius)
@@ -921,7 +1001,7 @@ const BraidPoolDAG: React.FC = () => {
       })
       .attr('stroke-width', (d) => {
         // Make highlighted nodes have thicker borders
-        if (highlightedNodes.has(d.id)) return 4;
+        if (highlightedNodes.has(d.id)) return 5;
         if (highlightOrphans && (!d.children || d.children.length === 0))
           return 3;
         if (hwPathSet.has(d.id)) return 3;
@@ -939,14 +1019,83 @@ const BraidPoolDAG: React.FC = () => {
         return 1;
       });
 
+    // Add pulsing highlight effect to matched nodes
+    nodes
+      .filter(
+        (d) => highlightedNodes.has(d.id) && matchingNodes.indexOf(d.id) >= 0
+      )
+      .append('circle')
+      .attr('r', nodeRadius + 8)
+      .attr('fill', 'none')
+      .attr('stroke', '#ffffff')
+      .attr('stroke-width', 2)
+      .attr('opacity', 0.6)
+      .style('pointer-events', 'none')
+      .call((selection) => {
+        selection
+          .append('animate')
+          .attr('attributeName', 'r')
+          .attr(
+            'values',
+            `${nodeRadius + 8};${nodeRadius + 15};${nodeRadius + 8}`
+          )
+          .attr('dur', '1.5s')
+          .attr('repeatCount', 'indefinite');
+
+        selection
+          .append('animate')
+          .attr('attributeName', 'opacity')
+          .attr('values', '0.6;0.2;0.6')
+          .attr('dur', '1.5s')
+          .attr('repeatCount', 'indefinite');
+      });
+
+    // Add text labels to nodes
     nodes
       .append('text')
       .attr('dy', 4)
       .attr('text-anchor', 'middle')
       .text((d) => nodeIdMap[d.id] || '?')
-      .attr('fill', '#fff')
-      .style('font-size', 14)
+      .attr('fill', (d) => {
+        // Make highlighted node text brighter
+        if (highlightedNodes.has(d.id)) return '#FFFFFF';
+        return '#fff';
+      })
+      .style('font-size', (d) => {
+        // Make highlighted node text bigger
+        return highlightedNodes.has(d.id) ? 16 : 14;
+      })
+      .style('font-weight', (d) => {
+        // Make highlighted node text bold
+        return highlightedNodes.has(d.id) ? 'bold' : 'normal';
+      })
       .style('pointer-events', 'none'); // Prevent text from intercepting mouse events
+
+    // For directly matched nodes (not just path nodes), add a special indicator
+    nodes
+      .filter((d) => {
+        if (!searchTerm) return false;
+        if (!highlightedNodes.has(d.id)) return false;
+
+        // Only show yellow halo on exact matches
+        const isExactMatch =
+          nodeIdMap[d.id] === searchTerm || searchTerm === d.id;
+
+        // For numeric searches, only match exact node IDs
+        if (!isNaN(Number(searchTerm))) {
+          return nodeIdMap[d.id] === searchTerm;
+        }
+
+        // For non-numeric searches, match exact node IDs or exact node hashes
+        return matchingNodes.indexOf(d.id) >= 0;
+      })
+      .append('circle')
+      .attr('r', nodeRadius * 1.8)
+      .attr('fill', 'none')
+      .attr('stroke', '#ff0')
+      .attr('stroke-width', 3)
+      .attr('stroke-dasharray', '5,3')
+      .style('pointer-events', 'none');
 
     container
       .append('text')
@@ -961,7 +1110,7 @@ const BraidPoolDAG: React.FC = () => {
       .data([
         { id: 'arrow-blue', color: '#48CAE4' },
         { id: 'arrow-orange', color: '#FF8500' },
-        { id: 'arrow-white', color: '#FFFFFF' },
+        { id: 'arrow-white', color: '#00E5FF' },
       ])
       .enter()
       .append('marker')
@@ -1048,7 +1197,7 @@ const BraidPoolDAG: React.FC = () => {
           highlightedLinks.has(`${d.source}-${d.target}`) ||
           highlightedLinks.has(`${d.target}-${d.source}`)
         ) {
-          return '#ffffff';
+          return '#00E5FF';
         }
         return hwPathSet.has(d.source) && hwPathSet.has(d.target)
           ? '#FF8500'
@@ -1060,7 +1209,7 @@ const BraidPoolDAG: React.FC = () => {
           highlightedLinks.has(`${d.source}-${d.target}`) ||
           highlightedLinks.has(`${d.target}-${d.source}`)
         ) {
-          return 3;
+          return 2;
         }
         return 1.5;
       })
@@ -1124,6 +1273,7 @@ const BraidPoolDAG: React.FC = () => {
     enableDragging,
     nodePositions,
     draggedNode,
+    matchingNodes,
   ]);
 
   // Calculate depth of a node in the graph
