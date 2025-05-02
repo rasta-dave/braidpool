@@ -8,6 +8,7 @@ import CardTitle from '@mui/material/Typography';
 import '../../PublicExplorer.css';
 import Button from '@mui/material/Button';
 import { CircularProgress } from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import BraidPoolDAGControls from './BraidPoolDAGControls';
 import {
   ConnectivityType,
@@ -110,6 +111,8 @@ const BraidPoolDAG: React.FC = () => {
   );
 
   const [matchingNodes, setMatchingNodes] = useState<string[]>([]);
+
+  const navigate = useNavigate();
 
   const layoutNodes = useCallback(
     (
@@ -784,6 +787,14 @@ const BraidPoolDAG: React.FC = () => {
         return 'inline';
       })
       .style('cursor', enableDragging ? 'move' : 'pointer')
+      // Add click handler
+      .on('click', function (event, d) {
+        if (!enableDragging) {
+          // Only handle clicks when not in dragging mode
+          event.stopPropagation(); // Prevent other handlers
+          handleNodeClick(d.id);
+        }
+      })
       // Restore tooltip functionality
       .on('mouseover', function (event, d) {
         // Get basic node information
@@ -1274,6 +1285,7 @@ const BraidPoolDAG: React.FC = () => {
     nodePositions,
     draggedNode,
     matchingNodes,
+    navigate,
   ]);
 
   // Calculate depth of a node in the graph
@@ -1359,6 +1371,16 @@ const BraidPoolDAG: React.FC = () => {
 
     // Return calculated depth or default to 0
     return depthMap.get(nodeId) || 0;
+  };
+
+  // Handle node click to navigate to block details
+  const handleNodeClick = (nodeId: string) => {
+    console.log(
+      `🔗 Node clicked: ${nodeId} (ID: ${nodeIdMap[nodeId] || 'Unknown'})`
+    );
+
+    // Navigate to block detail view using the hash as identifier
+    navigate(`/explorer/block/${nodeId}`);
   };
 
   if (loading) {
