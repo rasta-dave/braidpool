@@ -316,15 +316,19 @@ const BraidPoolDAG: React.FC = () => {
     }
   }, [searchTerm, graphData, nodeIdMap]);
 
-  // Handle node dragging
+  // Handle node dragging with improved coordinate handling
   const handleNodeDragStart = (nodeId: string) => {
     if (enableDragging) {
+      console.log('🔄 Drag started for node:', nodeId);
       setDraggedNode(nodeId);
     }
   };
 
   const handleNodeDrag = (nodeId: string, x: number, y: number) => {
     if (enableDragging && draggedNode === nodeId) {
+      console.log('🔄 Dragging node:', nodeId, 'to position:', { x, y });
+
+      // Update node position directly
       setNodePositions((prev) => ({
         ...prev,
         [nodeId]: { x, y },
@@ -333,6 +337,7 @@ const BraidPoolDAG: React.FC = () => {
   };
 
   const handleNodeDragEnd = () => {
+    console.log('🔄 Drag ended for node:', draggedNode);
     setDraggedNode(null);
   };
 
@@ -523,6 +528,8 @@ const BraidPoolDAG: React.FC = () => {
   useEffect(() => {
     if (!svgRef.current || !graphData) return;
 
+    console.log('🔍 Render triggered, enableDragging:', enableDragging);
+
     // Filter nodes based on selected cohorts
     const filteredCohorts = graphData.cohorts.slice(-selectedCohorts);
     const filteredCohortNodes = new Set(filteredCohorts.flat());
@@ -572,6 +579,7 @@ const BraidPoolDAG: React.FC = () => {
 
     const container = svg.append('g');
 
+    // Store the zoom behavior reference
     zoomBehavior.current = d3
       .zoom<SVGSVGElement, unknown>()
       .scaleExtent([0.5, 5])
@@ -602,12 +610,13 @@ const BraidPoolDAG: React.FC = () => {
     const graphWidth = maxX - minX + 2 * nodeRadius;
     const centerOffset = (width - graphWidth) / 2 - minX;
 
+    // Apply initial zoom transform
+    const transform = d3.zoomIdentity
+      .translate(centerOffset, 0)
+      .scale(defaultZoom);
     svg
       .call(zoomBehavior.current)
-      .call(
-        zoomBehavior.current.transform,
-        d3.zoomIdentity.translate(centerOffset, 0).scale(defaultZoom)
-      );
+      .call(zoomBehavior.current.transform, transform);
 
     const hwPathSet = new Set(hwPath);
 
@@ -634,46 +643,244 @@ const BraidPoolDAG: React.FC = () => {
       }
     });
 
+    if (enableDragging) {
+      console.log('🔄 Node dragging is enabled');
+    } else {
+      console.log('⛔ Node dragging is disabled');
+    }
+
+    // Create simpler direct drag behavior
+    const drag = d3
+      .drag<SVGGElement, any>()
+      .on('start', function (event, d) {
+        if (!enableDragging) return;
+        d3.select(this).raise(); // Bring to front
+        event.sourceEvent.stopPropagation();
+        console.log('🖐️ Drag START event fired for node:', d.id);
+      })
+      .on('drag', function (event, d) {
+        if (!enableDragging) return;
+
+        // Direct DOM update - no state management during drag
+        console.log('👉 Drag MOVE event fired, coordinates:', event.x, event.y);
+        d3.select(this).attr('transform', `translate(${event.x}, ${event.y})`);
+
+        // Store final position in React state only when drag ends
+      })
+      .on('end', function (event, d) {
+        if (!enableDragging) return;
+
+        // Store the final position in React state
+        console.log(
+          '👋 Drag END event fired, final position:',
+          event.x,
+          event.y
+        );
+
+        // Update our React state with the final position
+        setNodePositions((prev) => ({
+          ...prev,
+          [d.id]: { x: event.x, y: event.y },
+        }));
+      });
+
+    // Apply positions and drag behavior to nodes
     const nodes = container
       .selectAll('.node')
       .data(allNodes)
       .enter()
       .append('g')
       .attr('class', 'node')
-      .attr(
-        'transform',
-        (d) =>
-          `translate(${(positions[d.id]?.x || 0) + offsetX},${
-            positions[d.id]?.y || 0
-          })`
-      )
+      .attr('transform', (d) => {
+        // Check if node has a custom position from dragging
+        if (nodePositions[d.id]) {
+          return `translate(${nodePositions[d.id].x}, ${
+            nodePositions[d.id].y
+          })`;
+        }
+        // Otherwise use the layout-calculated position
+        return `translate(${(positions[d.id]?.x || 0) + offsetX}, ${
+          positions[d.id]?.y || 0
+        })`;
+      })
       .style('display', (d) => {
         if (!visibleNodeIds.has(d.id)) return 'none';
         if (showHWPOnly && !hwPathSet.has(d.id)) return 'none';
         return 'inline';
       })
-      // Add dragging behavior
-      .call(
-        enableDragging
-          ? d3
-              .drag<SVGGElement, any>()
-              .on('start', function (event, d) {
-                handleNodeDragStart(d.id);
-              })
-              .on('drag', function (event, d) {
-                const x = event.x - offsetX;
-                const y = event.y;
-                handleNodeDrag(d.id, x, y);
-                d3.select(this).attr(
-                  'transform',
-                  `translate(${event.x},${event.y})`
-                );
-              })
-              .on('end', function () {
-                handleNodeDragEnd();
-              })
-          : () => {}
-      );
+      .style('cursor', enableDragging ? 'move' : 'pointer')
+      // Restore tooltip functionality
+      .on('mouseover', function (event, d) {
+        // Get basic node information
+        const cohortIndex = cohortMap.get(d.id);
+        const nodeValue = nodeValues[d.id] || 0;
+
+        // Calculate additional node properties
+        const depth = calculateNodeDepth(d.id, graphData);
+        const isOrphan =
+          !graphData.children[d.id] || graphData.children[d.id].length === 0;
+        const isRoot =
+          !graphData.parents[d.id] || graphData.parents[d.id].length === 0;
+        const bridgeNodes = findBridgeNodes(graphData);
+        const isBridge = bridgeNodes.has(d.id);
+
+        // Compute node's position in network
+        const parentsCount = graphData.parents[d.id]?.length || 0;
+        const childrenCount = graphData.children[d.id]?.length || 0;
+        const connectivityScore = parentsCount + childrenCount;
+
+        // Determine node's relation to HWP
+        const hwpStatus = hwPathSet.has(d.id)
+          ? 'On Highest Work Path'
+          : hwPath.some((hwpId) => graphData.parents[hwpId]?.includes(d.id))
+          ? 'Parent of HWP Node'
+          : hwPath.some((hwpId) => graphData.children[hwpId]?.includes(d.id))
+          ? 'Child of HWP Node'
+          : 'Not Connected to HWP';
+
+        // Calculate relative position in cohort
+        const cohortSize =
+          cohortIndex !== undefined
+            ? graphData.cohorts[cohortIndex]?.length || 0
+            : 0;
+        const cohortPosition =
+          cohortIndex !== undefined
+            ? `Node ${
+                graphData.cohorts[cohortIndex].indexOf(d.id) + 1
+              } of ${cohortSize}`
+            : 'N/A';
+
+        // Get hash-derived simulation attributes using the node's hash
+        const hashFirstByte = parseInt(d.id.substring(0, 2), 16);
+        const hashSecondByte = parseInt(d.id.substring(2, 4), 16);
+
+        // Simulate mining difficulty (based on hash values)
+        const simulatedDifficulty = ((hashFirstByte / 255) * 5).toFixed(2);
+
+        // Simulate propagation delay (ms)
+        const propagationDelay = Math.floor(hashSecondByte * 2);
+
+        // Simulate timestamp (for visualization purposes)
+        const timeOffset =
+          cohortIndex !== undefined
+            ? cohortIndex * 12000 // 12 seconds between cohorts
+            : 0;
+        const simulatedTimestamp = new Date(Date.now() - timeOffset)
+          .toISOString()
+          .replace('T', ' ')
+          .substring(0, 19);
+
+        // Calculate node's consensus weight based on connectivity and value
+        const consensusWeight = (
+          nodeValue * 0.4 +
+          (connectivityScore / 10) * 0.3 +
+          (hwPathSet.has(d.id) ? 0.3 : 0)
+        ).toFixed(3);
+
+        // Create formatted tooltip content with sections
+        const tooltipContent = `
+          <div style="border-bottom: 1px solid #3a97c9; margin-bottom: 8px; padding-bottom: 4px;">
+            <div style="font-weight: bold; font-size: 14px;">Node ${
+              nodeIdMap[d.id] || 'Unknown'
+            }</div>
+            <div style="font-family: monospace; font-size: 12px; color: #b3e5fc;">${
+              d.id
+            }</div>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: auto auto; gap: 4px; margin-bottom: 8px;">
+            <div style="font-weight: bold; color: #ccc;">Cohort:</div>
+            <div>${cohortIndex !== undefined ? cohortIndex : 'None'}</div>
+            
+            <div style="font-weight: bold; color: #ccc;">Position:</div>
+            <div>${cohortPosition}</div>
+            
+            <div style="font-weight: bold; color: #ccc;">Depth:</div>
+            <div>${depth}</div>
+            
+            <div style="font-weight: bold; color: #ccc;">Value:</div>
+            <div>${nodeValue.toFixed(4)}</div>
+            
+            <div style="font-weight: bold; color: #ccc;">Weight:</div>
+            <div>${consensusWeight}</div>
+          </div>
+          
+          <div style="border-bottom: 1px solid #3a97c9; margin-bottom: 8px; padding-bottom: 4px;">
+            <div style="font-weight: bold; color: #ccc;">Network:</div>
+            <div>Parents: ${parentsCount} | Children: ${childrenCount}</div>
+            <div>Connectivity Score: ${connectivityScore}</div>
+            ${
+              isRoot
+                ? '<div style="color: #ffa726;">⚠️ Root Node (no parents)</div>'
+                : ''
+            }
+            ${
+              isOrphan
+                ? '<div style="color: #ef5350;">⚠️ Orphan Node (no children)</div>'
+                : ''
+            }
+            ${
+              isBridge
+                ? '<div style="color: #66bb6a;">🔗 Bridge Node (connects cohorts)</div>'
+                : ''
+            }
+          </div>
+          
+          <div style="border-bottom: 1px solid #3a97c9; margin-bottom: 8px; padding-bottom: 4px;">
+            <div style="font-weight: bold; color: #ccc;">Simulation Data:</div>
+            <div>Timestamp: ${simulatedTimestamp}</div>
+            <div>Difficulty: ${simulatedDifficulty}</div>
+            <div>Propagation: ${propagationDelay}ms</div>
+          </div>
+          
+          <div style="color: ${
+            hwPathSet.has(d.id) ? '#FF8500' : '#ccc'
+          }; font-weight: ${hwPathSet.has(d.id) ? 'bold' : 'normal'};">
+            ${hwPathSet.has(d.id) ? '⭐ ' : ''}${hwpStatus}
+          </div>
+        `;
+
+        // Show the enhanced tooltip
+        tooltip
+          .style('visibility', 'visible')
+          .style('max-width', '350px')
+          .style('width', 'auto')
+          .style('background', 'rgba(20, 39, 78, 0.95)')
+          .style('border', '1px solid #3a97c9')
+          .style('border-radius', '6px')
+          .style('padding', '12px')
+          .style('font-size', '13px')
+          .style('line-height', '1.4')
+          .html(tooltipContent);
+
+        // If dragging is enabled, also make the node visually respond
+        if (enableDragging) {
+          d3.select(this)
+            .select('circle')
+            .transition()
+            .duration(200)
+            .attr('r', nodeRadius * 1.1);
+        }
+      })
+      .on('mouseout', function () {
+        // Hide tooltip
+        tooltip.style('visibility', 'hidden');
+
+        // Restore original node size if dragging is enabled
+        if (enableDragging) {
+          d3.select(this)
+            .select('circle')
+            .transition()
+            .duration(200)
+            .attr('r', nodeRadius);
+        }
+      });
+
+    // Apply drag conditionally based on enableDragging
+    if (enableDragging) {
+      nodes.call(drag);
+      console.log('🔄 Drag behavior applied to nodes');
+    }
 
     const cohortMap = new Map<string, number>();
     (cohorts as string[][]).forEach((cohort, index) => {
@@ -918,6 +1125,91 @@ const BraidPoolDAG: React.FC = () => {
     nodePositions,
     draggedNode,
   ]);
+
+  // Calculate depth of a node in the graph
+  const calculateNodeDepth = (nodeId: string, graphData: GraphData): number => {
+    // For HWP nodes, use their position in HWP as depth
+    const hwpIndex = graphData.highest_work_path.indexOf(nodeId);
+    if (hwpIndex >= 0) {
+      return hwpIndex;
+    }
+
+    // For non-HWP nodes, calculate depth based on parent chain
+    const visited = new Set<string>();
+    const depthMap = new Map<string, number>();
+
+    // Initially set all HWP nodes with their depth
+    graphData.highest_work_path.forEach((id, index) => {
+      depthMap.set(id, index);
+      visited.add(id);
+    });
+
+    // Queue for BFS traversal
+    const queue: { id: string; depth: number }[] = [];
+
+    // Start with all HWP nodes
+    graphData.highest_work_path.forEach((id, index) => {
+      // Add their children as starting points
+      const children = graphData.children[id] || [];
+      children.forEach((childId) => {
+        if (!visited.has(childId)) {
+          queue.push({ id: childId, depth: index + 1 });
+          visited.add(childId);
+        }
+      });
+    });
+
+    // Perform BFS to calculate depth of remaining nodes
+    while (queue.length > 0) {
+      const { id, depth } = queue.shift()!;
+      depthMap.set(id, depth);
+
+      // Process children
+      const children = graphData.children[id] || [];
+      children.forEach((childId) => {
+        if (!visited.has(childId)) {
+          queue.push({ id: childId, depth: depth + 1 });
+          visited.add(childId);
+        }
+      });
+    }
+
+    // If node wasn't reached from HWP, try to calculate from root nodes
+    if (!depthMap.has(nodeId)) {
+      // Find root nodes (nodes with no parents)
+      const rootNodes = Object.keys(graphData.parents).filter(
+        (id) => !graphData.parents[id] || graphData.parents[id].length === 0
+      );
+
+      // Reset visited set
+      visited.clear();
+
+      // Start BFS from root nodes
+      queue.length = 0;
+      rootNodes.forEach((id) => {
+        queue.push({ id, depth: 0 });
+        visited.add(id);
+      });
+
+      // Perform BFS
+      while (queue.length > 0) {
+        const { id, depth } = queue.shift()!;
+        depthMap.set(id, depth);
+
+        // Process children
+        const children = graphData.children[id] || [];
+        children.forEach((childId) => {
+          if (!visited.has(childId)) {
+            queue.push({ id: childId, depth: depth + 1 });
+            visited.add(childId);
+          }
+        });
+      }
+    }
+
+    // Return calculated depth or default to 0
+    return depthMap.get(nodeId) || 0;
+  };
 
   if (loading) {
     return (
